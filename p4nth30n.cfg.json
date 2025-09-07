@@ -1,0 +1,42 @@
+{
+  "repos": {
+    "SecLists": "https://github.com/danielmiessler/SecLists.git",
+    "PayloadsAllTheThings": "https://github.com/swisskyrepo/PayloadsAllTheThings.git",
+    "Exploits": "https://github.com/offensive-security/exploitdb.git",
+    "NucleiTemplates": "https://github.com/projectdiscovery/nuclei-templates.git",
+    "Wordlists": "https://github.com/berzerk0/Probable-Wordlists.git"
+  },
+  "limits": {
+    "parallel_jobs": 20,
+    "http_timeout": 15,
+    "rps": 500,
+    "max_concurrent_scans": 8
+  },
+  "nuclei": {
+    "enabled": true,
+    "severity": "info,low,medium,high,critical",
+    "rps": 800,
+    "conc": 150,
+    "all_templates": true
+  },
+  "report": {
+    "formats": [
+      "html",
+      "json"
+    ]
+  },
+  "plugins": {
+    "enabled": true,
+    "directory": "/home/runner/work/Bl4ckC3ll_PANTHEON/Bl4ckC3ll_PANTHEON/plugins"
+  },
+  "fallback": {
+    "enabled": true,
+    "direct_downloads": true
+  },
+  "resource_management": {
+    "cpu_threshold": 85,
+    "memory_threshold": 90,
+    "disk_threshold": 95,
+    "monitor_interval": 5
+  }
+}
