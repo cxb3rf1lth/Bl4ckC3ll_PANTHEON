@@ -40,7 +40,7 @@ The orchestrator detects tools at runtime. Missing tools are skipped gracefully.
 ## Quick start
 
 ```bash
-# 1) Clone your repo, then inside the project root:
+# 1) Clone the repo, then inside the project root:
 python3 -V  # ensure 3.9+
 pip3 install --upgrade pip
 
