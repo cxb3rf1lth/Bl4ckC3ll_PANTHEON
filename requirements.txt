@@ -1,0 +1,7 @@
+# Python dependencies for Bl4ckC3ll_PANTHEON
+# Core dependencies for system monitoring and resource management
+psutil>=5.9.0
+distro>=1.8.0
+
+# Optional but recommended for enhanced functionality
+requests>=2.28.0

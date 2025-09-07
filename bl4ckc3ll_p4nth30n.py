@@ -54,17 +54,27 @@ DEFAULT_CFG: Dict[str, Any] = {
         "parallel_jobs": 20,
         "http_timeout": 15,
         "rps": 500,
-        "max_concurrent_scans": 8
+        "max_concurrent_scans": 8,
+        "http_revalidation_timeout": 8
     },
     "nuclei": {
         "enabled": True,
-        "severity": "info,low,medium,high,critical",
+        "severity": "low,medium,high,critical",
         "rps": 800,
         "conc": 150,
-        "all_templates": True
+        "all_templates": True,
+        "keep_info_severity": False
+    },
+    "endpoints": {
+        "use_gau": True,
+        "use_katana": True,
+        "max_urls_per_target": 5000,
+        "katana_depth": 2
     },
     "report": {
-        "formats": ["html", "json"]
+        "formats": ["html", "json", "csv"],
+        "auto_open_html": True,
+        "include_viz": True
     },
     "plugins": {
         "enabled": True,
@@ -79,6 +89,17 @@ DEFAULT_CFG: Dict[str, Any] = {
         "memory_threshold": 90,
         "disk_threshold": 95,
         "monitor_interval": 5
+    },
+    "error_handling": {
+        "max_retries": 3,
+        "retry_delay": 2,
+        "continue_on_error": True,
+        "log_level": "INFO"
+    },
+    "validation": {
+        "validate_tools_on_startup": True,
+        "check_dependencies": True,
+        "warn_on_missing_tools": True
     }
 }
 
@@ -250,6 +271,119 @@ def save_cfg(cfg: Dict[str, Any]):
 
 def which(tool: str) -> bool:
     return shutil.which(tool) is not None
+
+# ---------- Dependency validation ----------
+def validate_dependencies() -> bool:
+    """Validate all dependencies and provide helpful error messages"""
+    logger.log("Validating dependencies...", "INFO")
+    
+    # Check Python version
+    python_version = sys.version_info
+    if python_version.major < 3 or (python_version.major == 3 and python_version.minor < 9):
+        logger.log(f"Python 3.9+ required, found {python_version.major}.{python_version.minor}", "ERROR")
+        return False
+    
+    # Check optional Python packages
+    missing_packages = []
+    
+    try:
+        import psutil
+        logger.log("psutil available for system monitoring", "DEBUG")
+    except ImportError:
+        missing_packages.append("psutil")
+    
+    try:
+        import distro
+        logger.log("distro available for OS detection", "DEBUG")
+    except ImportError:
+        missing_packages.append("distro")
+    
+    if missing_packages:
+        logger.log(f"Optional packages missing: {', '.join(missing_packages)}", "WARNING")
+        logger.log("Install with: pip3 install " + " ".join(missing_packages), "INFO")
+        logger.log("Or run: pip3 install -r requirements.txt", "INFO")
+    
+    # Check security tools
+    tools = {
+        "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+        "httpx": "github.com/projectdiscovery/httpx/cmd/httpx@latest", 
+        "naabu": "github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
+        "nuclei": "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+        "katana": "github.com/projectdiscovery/katana/cmd/katana@latest",
+        "gau": "github.com/lc/gau/v2/cmd/gau@latest"
+    }
+    
+    available_tools = []
+    missing_tools = []
+    
+    for tool, install_cmd in tools.items():
+        if which(tool):
+            available_tools.append(tool)
+            logger.log(f"✓ {tool} available", "DEBUG")
+        else:
+            missing_tools.append((tool, install_cmd))
+    
+    logger.log(f"Security tools available: {len(available_tools)}/{len(tools)}", "INFO")
+    
+    if missing_tools:
+        logger.log("Missing security tools:", "WARNING")
+        for tool, install_cmd in missing_tools:
+            logger.log(f"  {tool}: go install {install_cmd}", "WARNING")
+        logger.log("Run the install.sh script to automatically install missing tools", "INFO")
+    
+    # Check essential system tools
+    essential_tools = ["git", "wget", "unzip"]
+    missing_essential = []
+    
+    for tool in essential_tools:
+        if not which(tool):
+            missing_essential.append(tool)
+    
+    if missing_essential:
+        logger.log(f"Essential system tools missing: {', '.join(missing_essential)}", "ERROR")
+        logger.log("Please install missing system tools using your package manager", "ERROR")
+        return False
+    
+    # Check Go installation for tool installation
+    if not which("go") and missing_tools:
+        logger.log("Go not found but security tools are missing", "WARNING")
+        logger.log("Install Go to enable automatic tool installation", "WARNING")
+    
+    logger.log("Dependency validation completed", "SUCCESS")
+    return True
+
+def check_and_setup_environment():
+    """Check environment and provide setup guidance if needed"""
+    issues_found = []
+    
+    # Check if we're in the right directory
+    script_dir = Path(__file__).resolve().parent
+    if not (script_dir / "p4nth30n.cfg.json").exists() and not (script_dir / "targets.txt").exists():
+        issues_found.append("Configuration files missing. Run from the correct directory.")
+    
+    # Check PATH for Go tools
+    go_bin_path = Path.home() / "go" / "bin"
+    if go_bin_path.exists():
+        path_env = os.environ.get("PATH", "")
+        if str(go_bin_path) not in path_env:
+            issues_found.append(f"Go tools directory not in PATH: {go_bin_path}")
+            logger.log(f"Add to PATH: export PATH=\"{go_bin_path}:$PATH\"", "INFO")
+    
+    # Check write permissions
+    try:
+        test_file = script_dir / ".write_test"
+        test_file.touch()
+        test_file.unlink()
+    except PermissionError:
+        issues_found.append("No write permission in script directory")
+    
+    if issues_found:
+        logger.log("Environment issues found:", "WARNING")
+        for issue in issues_found:
+            logger.log(f"  - {issue}", "WARNING")
+        return False
+    
+    return True
 
 # ---------- Resource monitor ----------
 def get_system_resources() -> Dict[str, float]:
@@ -888,6 +1022,17 @@ def main():
     ensure_layout()
     print(BANNER)
     print(f"\033[96m{APP} v{VERSION}\033[0m by {AUTHOR}")
+    
+    # Validate dependencies and environment
+    if not validate_dependencies():
+        logger.log("Critical dependencies missing. Please run install.sh or install manually.", "ERROR")
+        logger.log("Continuing with limited functionality...", "WARNING")
+        time.sleep(2)
+    
+    if not check_and_setup_environment():
+        logger.log("Environment setup issues detected. Some features may not work correctly.", "WARNING")
+        time.sleep(1)
+    
     while True:
         display_menu()
         c = get_choice()

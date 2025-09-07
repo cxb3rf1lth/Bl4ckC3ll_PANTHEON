@@ -1,1 +1,19 @@
 2025-09-07 01:43:40 - DEBUG - PATH updated
+2025-09-07 17:52:58 - DEBUG - PATH updated
+2025-09-07 17:54:29 - DEBUG - PATH updated
+2025-09-07 17:54:29 - INFO - Validating dependencies...
+2025-09-07 17:54:29 - DEBUG - distro available for OS detection
+2025-09-07 17:54:29 - WARNING - Optional packages missing: psutil
+2025-09-07 17:54:29 - INFO - Install with: pip3 install psutil
+2025-09-07 17:54:29 - INFO - Or run: pip3 install -r requirements.txt
+2025-09-07 17:54:29 - INFO - Security tools available: 0/6
+2025-09-07 17:54:29 - WARNING - Missing security tools:
+2025-09-07 17:54:29 - WARNING -   subfinder: go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+2025-09-07 17:54:29 - WARNING -   httpx: go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+2025-09-07 17:54:29 - WARNING -   naabu: go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+2025-09-07 17:54:29 - WARNING -   nuclei: go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+2025-09-07 17:54:29 - WARNING -   katana: go install github.com/projectdiscovery/katana/cmd/katana@latest
+2025-09-07 17:54:29 - WARNING -   gau: go install github.com/lc/gau/v2/cmd/gau@latest
+2025-09-07 17:54:29 - INFO - Run the install.sh script to automatically install missing tools
+2025-09-07 17:54:29 - SUCCESS - Dependency validation completed
+2025-09-07 17:54:29 - INFO - Goodbye!

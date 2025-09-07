@@ -40,27 +40,57 @@ The orchestrator detects tools at runtime. Missing tools are skipped gracefully.
 ## Quick start
 
 ```bash
-# 1) Clone the repo, then inside the project root:
-python3 -V  # ensure 3.9+
-pip3 install --upgrade pip
+# 1) Clone the repo
+git clone https://github.com/cxb3rf1lth/Bl4ckC3ll_PANTHEON.git
+cd Bl4ckC3ll_PANTHEON
 
-# 2) Install Go based tools (recommended)
-# Ensure GOPATH and GOBIN are set, then:
+# 2) Run the automated setup (recommended)
+./quickstart.sh
+```
+
+The quickstart script will automatically:
+- Validate Python 3.9+ installation
+- Install Python dependencies
+- Install Go and security tools
+- Setup environment variables
+- Create necessary directories
+- Run installation tests
+- Start the application
+
+### Manual installation (alternative)
+
+```bash
+# 1) Validate Python version
+python3 -V  # ensure 3.9+
+
+# 2) Run automated installer
+./install.sh
+
+# 3) Test installation
+python3 test_installation.py
+
+# 4) Add targets (one per line)
+echo "example.com" > targets.txt
+
+# 5) Run the orchestrator
+python3 bl4ckc3ll_p4nth30n.py
+```
+
+### Individual tool installation (if needed)
+
+```bash
+# Install Python dependencies manually
+pip3 install --upgrade pip
+pip3 install -r requirements.txt
+
+# Install Go-based tools
+export PATH="$HOME/go/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
 go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
 go install github.com/projectdiscovery/httpx/cmd/httpx@latest
 go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
 go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 go install github.com/projectdiscovery/katana/cmd/katana@latest
 go install github.com/lc/gau/v2/cmd/gau@latest
-
-# 3) Ensure PATH includes common locations
-export PATH="$HOME/go/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
-
-# 4) Add targets (one per line)
-printf "example.com\n" > targets.txt
-
-# 5) Run the orchestrator
-python3 bl4ckc3ll_p4nth30n.py
 ```
 
 On first runs, select:
