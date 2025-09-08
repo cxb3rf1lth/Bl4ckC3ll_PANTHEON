@@ -325,6 +325,157 @@ class Logger:
 
 logger = Logger()
 
+# ---------- Error Handling Helpers ----------
+def safe_execute(func, *args, default=None, error_msg="Operation failed", log_level="ERROR", **kwargs):
+    """Safely execute a function with standardized error handling"""
+    try:
+        return func(*args, **kwargs)
+    except FileNotFoundError as e:
+        logger.log(f"{error_msg} - File not found: {e}", log_level)
+        return default
+    except PermissionError as e:
+        logger.log(f"{error_msg} - Permission denied: {e}", log_level)
+        return default
+    except subprocess.TimeoutExpired as e:
+        logger.log(f"{error_msg} - Timeout: {e}", log_level)
+        return default
+    except Exception as e:
+        logger.log(f"{error_msg}: {e}", log_level)
+        return default
+
+def safe_file_operation(operation, path, *args, **kwargs):
+    """Safely perform file operations with proper error handling"""
+    try:
+        return operation(path, *args, **kwargs)
+    except FileNotFoundError:
+        logger.log(f"File not found: {path}", "ERROR")
+        return None
+    except PermissionError:
+        logger.log(f"Permission denied accessing: {path}", "ERROR")
+        return None
+    except IsADirectoryError:
+        logger.log(f"Expected file but found directory: {path}", "ERROR")
+        return None
+    except OSError as e:
+        logger.log(f"OS error accessing {path}: {e}", "ERROR")
+        return None
+    except Exception as e:
+        logger.log(f"Unexpected error with {path}: {e}", "ERROR")
+        return None
+
+def validate_input(value: str, pattern: str = None, max_length: int = 1000, allow_empty: bool = False) -> bool:
+    """Validate user input with security considerations"""
+    if not value and not allow_empty:
+        return False
+    
+    if len(value) > max_length:
+        logger.log(f"Input too long: {len(value)} > {max_length}", "WARNING")
+        return False
+    
+    # Basic security checks
+    dangerous_patterns = [
+        r'[;&|`$(){}[\]\\]',  # Command injection patterns
+        r'\.\./',             # Path traversal
+        r'<script',           # XSS patterns
+        r'javascript:',       # JavaScript injection
+    ]
+    
+    import re
+    for dangerous in dangerous_patterns:
+        if re.search(dangerous, value, re.IGNORECASE):
+            logger.log(f"Potentially dangerous input detected: {value[:50]}", "WARNING")
+            return False
+    
+    # Optional pattern validation
+    if pattern and not re.match(pattern, value):
+        return False
+    
+    return True
+
+# ---------- Utility Functions ----------
+def create_resource_monitor_thread(cfg: Dict[str, Any]) -> Tuple[threading.Event, threading.Thread]:
+    """Create and start a resource monitoring thread"""
+    stop_event = threading.Event()
+    monitor_thread = threading.Thread(
+        target=resource_monitor, 
+        args=(cfg, stop_event), 
+        daemon=True
+    )
+    monitor_thread.start()
+    return stop_event, monitor_thread
+
+def cleanup_resource_monitor(stop_event: threading.Event, monitor_thread: threading.Thread):
+    """Safely cleanup resource monitoring thread"""
+    try:
+        stop_event.set()
+        monitor_thread.join(timeout=5)  # Don't wait forever
+    except Exception as e:
+        logger.log(f"Error cleaning up resource monitor: {e}", "WARNING")
+
+def safe_http_request(url: str, timeout: int = 10, headers: Dict[str, str] = None) -> Optional[str]:
+    """Safely make HTTP requests with proper error handling and validation"""
+    if not validate_input(url, max_length=2000):
+        logger.log(f"Invalid URL for HTTP request: {url[:100]}", "WARNING") 
+        return None
+    
+    # Rate limiting to be respectful
+    import time
+    time.sleep(0.1)  # 100ms delay between requests
+    
+    # Use curl for consistent behavior with optimized settings
+    cmd = ["curl", "-s", "-k", "-L", "-m", str(timeout), "--max-redirs", "3"]
+    
+    # Add User-Agent to be more respectful
+    cmd.extend(["-H", "User-Agent: Bl4ckC3ll_PANTHEON/9.0.0 Security Scanner"])
+    
+    if headers:
+        for key, value in headers.items():
+            if validate_input(key) and validate_input(value):
+                cmd.extend(["-H", f"{key}: {value}"])
+    
+    cmd.append(url)
+    
+    result = safe_execute(
+        run_cmd,
+        cmd,
+        capture=True, 
+        timeout=timeout + 5,
+        check_return=False,
+        default=None,
+        error_msg=f"HTTP request failed for {url}",
+        log_level="DEBUG"
+    )
+    
+    return result.stdout if result else None
+
+def execute_tool_safely(tool_name: str, args: List[str], timeout: int = 300, 
+                       output_file: Optional[Path] = None) -> bool:
+    """Safely execute security tools with standardized error handling"""
+    if not which(tool_name):
+        logger.log(f"Tool not available: {tool_name}", "WARNING")
+        return False
+    
+    # Validate arguments
+    for arg in args:
+        if isinstance(arg, str) and not validate_input(arg, max_length=500):
+            logger.log(f"Invalid argument for {tool_name}: {arg[:50]}", "WARNING")
+            return False
+    
+    cmd = [tool_name] + args
+    result = safe_execute(
+        run_cmd,
+        cmd,
+        capture=bool(output_file),
+        timeout=timeout,
+        default=None,
+        error_msg=f"Tool execution failed: {tool_name}"
+    )
+    
+    if result and output_file and hasattr(result, 'stdout'):
+        return atomic_write(output_file, result.stdout)
+    
+    return result is not None
+
 # ---------- Utils ----------
 def _bump_path():
     envpath = os.environ.get("PATH", "")
@@ -349,33 +500,53 @@ _bump_path()
 def ts() -> str:
     return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-def atomic_write(path: Path, data: str):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", delete=False, dir=path.parent, encoding="utf-8") as tmp:
-        tmp.write(data)
-        tmp.flush()
-        os.fsync(tmp.fileno())
-        tmp_path = Path(tmp.name)
-    os.replace(tmp_path, path)
+def atomic_write(path: Path, data: str) -> bool:
+    """Atomically write data to a file with proper error handling"""
+    def _write_operation():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile("w", delete=False, dir=path.parent, encoding="utf-8") as tmp:
+            tmp.write(data)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+            tmp_path = Path(tmp.name)
+        os.replace(tmp_path, path)
+        return True
+    
+    return safe_execute(
+        _write_operation,
+        default=False,
+        error_msg=f"Failed to write file {path}"
+    )
 
 def read_lines(path: Path) -> List[str]:
+    """Read lines from a file, ignoring comments and empty lines"""
     if not path.exists():
         return []
-    out: List[str] = []
-    for l in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        s = l.strip()
-        if s and not s.startswith("#"):
-            out.append(s)
-    return out
+    
+    def _read_operation():
+        out: List[str] = []
+        for l in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            s = l.strip()
+            if s and not s.startswith("#"):
+                out.append(s)
+        return out
+    
+    return safe_execute(
+        _read_operation,
+        default=[],
+        error_msg=f"Failed to read file {path}",
+        log_level="WARNING"
+    )
 
-def write_uniq(path: Path, items: List[str]):
+def write_uniq(path: Path, items: List[str]) -> bool:
+    """Write unique items to file, removing duplicates"""
     seen = set()
     out: List[str] = []
     for x in items:
         if x not in seen:
             seen.add(x)
             out.append(x)
-    atomic_write(path, "\n".join(out) + ("\n" if out else ""))
+    return atomic_write(path, "\n".join(out) + ("\n" if out else ""))
 
 def os_kind() -> str:
     s = platform.system().lower()
@@ -451,11 +622,44 @@ def ensure_layout():
         atomic_write(CFG_FILE, json.dumps(DEFAULT_CFG, indent=2))
 
 def load_cfg() -> Dict[str, Any]:
+    """Load and validate configuration"""
     ensure_layout()
     try:
-        return json.loads(CFG_FILE.read_text(encoding="utf-8"))
-    except Exception:
+        cfg_data = json.loads(CFG_FILE.read_text(encoding="utf-8"))
+        # Validate critical configuration sections
+        return _validate_configuration(cfg_data)
+    except Exception as e:
+        logger.log(f"Configuration load error: {e}, using defaults", "WARNING")
         return DEFAULT_CFG.copy()
+
+def _validate_configuration(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate configuration values and apply safe defaults"""
+    # Create a copy to avoid modifying the original
+    validated_cfg = cfg.copy()
+    
+    # Validate limits section
+    limits = validated_cfg.get("limits", {})
+    limits["max_concurrent_scans"] = max(1, min(limits.get("max_concurrent_scans", 8), 20))
+    limits["http_timeout"] = max(5, min(limits.get("http_timeout", 15), 300))
+    limits["rps"] = max(1, min(limits.get("rps", 500), 2000))
+    validated_cfg["limits"] = limits
+    
+    # Validate nuclei section
+    nuclei = validated_cfg.get("nuclei", {})
+    nuclei["rps"] = max(1, min(nuclei.get("rps", 800), 2000))
+    nuclei["conc"] = max(1, min(nuclei.get("conc", 150), 500))
+    validated_cfg["nuclei"] = nuclei
+    
+    # Ensure resource management section exists
+    if "resource_management" not in validated_cfg:
+        validated_cfg["resource_management"] = {
+            "monitor_interval": 5,
+            "cpu_threshold": 80,
+            "memory_threshold": 80,
+            "disk_threshold": 90
+        }
+    
+    return validated_cfg
 
 def save_cfg(cfg: Dict[str, Any]):
     atomic_write(CFG_FILE, json.dumps(cfg, indent=2))
@@ -464,44 +668,41 @@ def which(tool: str) -> bool:
     return shutil.which(tool) is not None
 
 # ---------- Dependency validation ----------
-def validate_dependencies() -> bool:
-    """Validate all dependencies and provide helpful error messages"""
-    logger.log("Validating dependencies...", "INFO")
-    
-    # Check Python version
+def _check_python_version() -> bool:
+    """Check if Python version meets requirements"""
     python_version = sys.version_info
     if python_version.major < 3 or (python_version.major == 3 and python_version.minor < 9):
         logger.log(f"Python 3.9+ required, found {python_version.major}.{python_version.minor}", "ERROR")
         return False
-    
-    # Check optional Python packages
+    return True
+
+def _check_python_packages() -> List[str]:
+    """Check optional Python packages and return missing ones"""
     missing_packages = []
     
-    try:
-        import psutil
-        logger.log("psutil available for system monitoring", "DEBUG")
-    except ImportError:
-        missing_packages.append("psutil")
+    packages_to_check = {
+        "psutil": "System monitoring",
+        "distro": "OS detection", 
+        "requests": "HTTP operations"
+    }
     
-    try:
-        import distro
-        logger.log("distro available for OS detection", "DEBUG")
-    except ImportError:
-        missing_packages.append("distro")
-    
-    try:
-        import requests
-        logger.log("requests available for HTTP operations", "DEBUG")
-    except ImportError:
-        missing_packages.append("requests")
+    for package, description in packages_to_check.items():
+        try:
+            __import__(package)
+            logger.log(f"{package} available for {description.lower()}", "DEBUG")
+        except ImportError:
+            missing_packages.append(package)
     
     if missing_packages:
         logger.log(f"Optional packages missing: {', '.join(missing_packages)}", "WARNING")
         logger.log("Install with: pip3 install " + " ".join(missing_packages), "INFO")
         logger.log("Or run: pip3 install -r requirements.txt", "INFO")
     
-    # Check security tools (core + enhanced)
-    tools = {
+    return missing_packages
+
+def _get_security_tools_config() -> Dict[str, str]:
+    """Get configuration for security tools and their install commands"""
+    return {
         # Core recon tools
         "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
         "httpx": "github.com/projectdiscovery/httpx/cmd/httpx@latest", 
@@ -532,10 +733,14 @@ def validate_dependencies() -> bool:
         "arjun": "pip3 install arjun",
         "dalfox": "go install github.com/hahwul/dalfox/v2@latest"
     }
+
+def _check_security_tools() -> Tuple[List[str], List[Tuple[str, str]], int]:
+    """Check security tools availability"""
+    tools = _get_security_tools_config()
+    core_tools = ["subfinder", "httpx", "naabu", "nuclei", "katana", "gau", "ffuf", "nmap", "sqlmap"]
     
     available_tools = []
     missing_tools = []
-    core_tools = ["subfinder", "httpx", "naabu", "nuclei", "katana", "gau", "ffuf", "nmap", "sqlmap"]
     
     for tool, install_cmd in tools.items():
         if which(tool):
@@ -544,10 +749,9 @@ def validate_dependencies() -> bool:
         else:
             missing_tools.append((tool, install_cmd))
     
-    logger.log(f"Security tools available: {len(available_tools)}/{len(tools)}", "INFO")
-    
-    # Check if core tools are available
     core_available = sum(1 for tool in core_tools if which(tool))
+    
+    logger.log(f"Security tools available: {len(available_tools)}/{len(tools)}", "INFO")
     logger.log(f"Core tools available: {core_available}/{len(core_tools)}", "INFO")
     
     if missing_tools:
@@ -559,7 +763,10 @@ def validate_dependencies() -> bool:
                 logger.log(f"  \033[93m{tool}\033[0m (ENHANCED): {install_cmd}", "WARNING")
         logger.log("Run the install.sh script to automatically install missing tools", "INFO")
     
-    # Check essential system tools
+    return available_tools, missing_tools, core_available
+
+def _check_essential_tools() -> bool:
+    """Check essential system tools"""
     essential_tools = ["git", "wget", "unzip", "curl", "dig", "whois"]
     missing_essential = []
     
@@ -570,6 +777,26 @@ def validate_dependencies() -> bool:
     if missing_essential:
         logger.log(f"Essential system tools missing: {', '.join(missing_essential)}", "ERROR")
         logger.log("Please install missing system tools using your package manager", "ERROR")
+        return False
+    
+    return True
+
+def validate_dependencies() -> bool:
+    """Validate all dependencies and provide helpful error messages"""
+    logger.log("Validating dependencies...", "INFO")
+    
+    # Check Python version
+    if not _check_python_version():
+        return False
+    
+    # Check optional Python packages
+    _check_python_packages()
+    
+    # Check security tools
+    available_tools, missing_tools, core_available = _check_security_tools()
+    
+    # Check essential system tools
+    if not _check_essential_tools():
         return False
     
     # Check Go installation for tool installation
@@ -638,16 +865,32 @@ def get_system_resources() -> Dict[str, float]:
             return {"cpu": 0.0, "memory": 0.0, "disk": 0.0}
 
 def resource_monitor(cfg: Dict[str, Any], stop_event: threading.Event):
+    """Monitor system resources and throttle when necessary"""
+    monitor_interval = cfg.get("resource_management", {}).get("monitor_interval", 5)
+    cpu_threshold = cfg.get("resource_management", {}).get("cpu_threshold", 80)
+    memory_threshold = cfg.get("resource_management", {}).get("memory_threshold", 80)
+    disk_threshold = cfg.get("resource_management", {}).get("disk_threshold", 90)
+    
     while not stop_event.is_set():
-        r = get_system_resources()
-        logger.log(f"Resources CPU:{r['cpu']:.1f}% MEM:{r['memory']:.1f}% DISK:{r['disk']:.1f}%", "DEBUG")
-        if r["cpu"] > cfg["resource_management"]["cpu_threshold"] or \
-           r["memory"] > cfg["resource_management"]["memory_threshold"] or \
-           r["disk"] > cfg["resource_management"]["disk_threshold"]:
-            logger.log("High resource usage, slowing down...", "WARNING")
-            time.sleep(cfg["resource_management"]["monitor_interval"] * 2)
-        else:
-            time.sleep(cfg["resource_management"]["monitor_interval"])
+        try:
+            r = get_system_resources()
+            if r:  # Only log if we got valid resource data
+                logger.log(f"Resources CPU:{r['cpu']:.1f}% MEM:{r['memory']:.1f}% DISK:{r['disk']:.1f}%", "DEBUG")
+                
+                # Check thresholds and throttle if necessary
+                if (r["cpu"] > cpu_threshold or 
+                    r["memory"] > memory_threshold or 
+                    r["disk"] > disk_threshold):
+                    logger.log("High resource usage, throttling operations...", "WARNING")
+                    time.sleep(monitor_interval * 2)
+                else:
+                    time.sleep(monitor_interval)
+            else:
+                # Fallback if resource monitoring fails
+                time.sleep(monitor_interval)
+        except Exception as e:
+            logger.log(f"Resource monitoring error: {e}", "WARNING")
+            time.sleep(monitor_interval)
 
 # ---------- External sources ----------
 def git_clone_or_pull(url: str, dest: Path):
@@ -865,27 +1108,78 @@ requests:
         f.write(custom_template)
 
 def merge_wordlists(seclists_path: Path, payloads_path: Path, probable_wordlists_path: Path, additional_paths: Dict[str, Path] = None):
+    """Efficiently merge wordlists with memory optimization"""
     logger.log("Merging wordlists...", "INFO")
     MERGED_DIR.mkdir(parents=True, exist_ok=True)
-    all_files: List[Path] = []
-    for base in [seclists_path, payloads_path, probable_wordlists_path, EXTRA_DIR]:
-        if base.exists():
-            for root, _, files in os.walk(base):
-                for f in files:
-                    if f.endswith((".txt", ".dic", ".lst")):
-                        all_files.append(Path(root) / f)
-    merged_file = MERGED_DIR / "all_merged_wordlist.txt"
-    uniq = set()
-    for fp in all_files:
+    
+    def _collect_wordlist_files(base_paths: List[Path]) -> List[Path]:
+        """Collect wordlist files from base paths"""
+        all_files: List[Path] = []
+        for base in base_paths:
+            if base.exists():
+                for root, _, files in os.walk(base):
+                    for f in files:
+                        if f.endswith((".txt", ".dic", ".lst")):
+                            file_path = Path(root) / f
+                            # Skip very large files to avoid memory issues
+                            try:
+                                if file_path.stat().st_size > 100 * 1024 * 1024:  # 100MB limit
+                                    logger.log(f"Skipping large file: {file_path}", "WARNING")
+                                    continue
+                            except OSError:
+                                continue
+                            all_files.append(file_path)
+        return all_files
+    
+    def _process_wordlist_file(fp: Path, uniq: set, max_lines: int = 100000) -> int:
+        """Process a single wordlist file with limits"""
+        lines_processed = 0
         try:
-            for line in fp.read_text(encoding="utf-8", errors="ignore").splitlines():
-                s = line.strip()
-                if s and not s.startswith("#") and len(s) < 512:
-                    uniq.add(s)
+            with open(fp, 'r', encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if lines_processed >= max_lines:
+                        logger.log(f"Line limit reached for {fp}, stopping", "DEBUG")
+                        break
+                    
+                    s = line.strip()
+                    if s and not s.startswith("#") and 3 <= len(s) <= 100:  # Reasonable length limits
+                        uniq.add(s)
+                        lines_processed += 1
+            
+            return lines_processed
         except Exception as e:
             logger.log(f"Read error {fp}: {e}", "WARNING")
+            return 0
+    
+    # Collect files from all sources
+    base_paths = [seclists_path, payloads_path, probable_wordlists_path, EXTRA_DIR]
+    if additional_paths:
+        base_paths.extend(additional_paths.values())
+    
+    all_files = _collect_wordlist_files(base_paths)
+    logger.log(f"Found {len(all_files)} wordlist files to process", "INFO")
+    
+    # Process files with memory management
+    uniq = set()
+    total_processed = 0
+    max_total_lines = 1000000  # 1M line limit to prevent memory issues
+    
+    for fp in all_files:
+        if total_processed >= max_total_lines:
+            logger.log(f"Total line limit reached ({max_total_lines}), stopping", "WARNING")
+            break
+        
+        processed = _process_wordlist_file(fp, uniq, max_lines=50000)
+        total_processed += processed
+        
+        # Memory management: if set gets too large, break
+        if len(uniq) > 500000:  # 500k unique items limit
+            logger.log("Unique items limit reached, stopping merge", "WARNING")
+            break
+    
+    merged_file = MERGED_DIR / "all_merged_wordlist.txt"
     atomic_write(merged_file, "\n".join(sorted(uniq)))
-    logger.log(f"Merged {len(uniq)} unique lines -> {merged_file}", "SUCCESS")
+    logger.log(f"Merged {len(uniq)} unique lines from {len(all_files)} files -> {merged_file}", "SUCCESS")
 
 # ---------- Run Management ----------
 def new_run() -> Path:
@@ -2265,6 +2559,62 @@ def check_cors_configuration(target: str, out_file: Path, env: Dict[str, str]):
     except Exception as e:
         logger.log(f"CORS analysis error: {e}", "WARNING")
 
+def _check_admin_panels(target: str) -> List[str]:
+    """Check for exposed admin panels"""
+    admin_paths = [
+        "/admin", "/administrator", "/admin.php", "/admin/login.php",
+        "/wp-admin", "/administrator/", "/admin/index.php", "/admin/admin.php",
+        "/login", "/login.php", "/signin", "/signin.php"
+    ]
+    
+    found_panels = []
+    if not which("curl"):
+        return found_panels
+    
+    for path in admin_paths:
+        full_url = target.rstrip('/') + path
+        response = safe_http_request(full_url, timeout=10)
+        if response and ("200 OK" in response or "302 Found" in response):
+            found_panels.append(path)
+    
+    return found_panels
+
+def _check_backup_files(target: str) -> List[str]:
+    """Check for exposed backup files"""
+    backup_extensions = [".bak", ".backup", ".old", ".orig", ".save", ".tmp"]
+    common_files = ["index", "config", "database", "db", "admin", "login"]
+    
+    found_backups = []
+    if not which("curl"):
+        return found_backups
+    
+    for file in common_files:
+        for ext in backup_extensions:
+            backup_url = f"{target.rstrip('/')}/{file}{ext}"
+            response = safe_http_request(backup_url, timeout=5)
+            if response and "200 OK" in response:
+                found_backups.append(f"{file}{ext}")
+    
+    return found_backups
+
+def _check_robots_txt(target: str) -> List[str]:
+    """Analyze robots.txt for sensitive information"""
+    disallowed = []
+    if not which("curl"):
+        return disallowed
+    
+    robots_url = f"{target.rstrip('/')}/robots.txt"
+    response = safe_http_request(robots_url, timeout=10)
+    
+    if response and "disallow" in response.lower():
+        for line in response.split('\n'):
+            if line.lower().startswith('disallow:'):
+                path = line.split(':', 1)[1].strip()
+                if path and path != '/':
+                    disallowed.append(path)
+    
+    return disallowed[:10]  # Limit to first 10
+
 def perform_additional_checks(target: str, target_dir: Path, out_file: Path, cfg: Dict[str, Any], env: Dict[str, str]):
     """Perform additional vulnerability checks based on discovered services"""
     additional_vulns = {
@@ -2274,58 +2624,24 @@ def perform_additional_checks(target: str, target_dir: Path, out_file: Path, cfg
         "recommendations": []
     }
     
-    try:
+    def _perform_checks():
         # Check for common admin panels
-        admin_paths = [
-            "/admin", "/administrator", "/admin.php", "/admin/login.php",
-            "/wp-admin", "/administrator/", "/admin/index.php", "/admin/admin.php",
-            "/login", "/login.php", "/signin", "/signin.php"
-        ]
-        
-        if which("curl"):
-            additional_vulns["checks_performed"].append("Admin panel discovery")
-            found_panels = []
-            
-            for path in admin_paths:
-                full_url = target.rstrip('/') + path
-                try:
-                    result = run_cmd(["curl", "-I", "-s", "-k", "-m", "10", full_url], 
-                                   capture=True, timeout=15, check_return=False)
-                    if result.stdout and ("200 OK" in result.stdout or "302 Found" in result.stdout):
-                        found_panels.append(path)
-                except Exception:
-                    continue
-            
-            if found_panels:
-                additional_vulns["vulnerabilities"].append({
-                    "type": "Exposed Admin Panels",
-                    "severity": "medium",
-                    "description": f"Found {len(found_panels)} potential admin panels",
-                    "details": found_panels
-                })
+        additional_vulns["checks_performed"].append("Admin panel discovery")
+        found_panels = _check_admin_panels(target)
+        if found_panels:
+            additional_vulns["vulnerabilities"].append({
+                "type": "Exposed Admin Panels",
+                "severity": "medium",
+                "description": f"Found {len(found_panels)} potential admin panels",
+                "details": found_panels
+            })
         
         # Check for common backup files
-        backup_extensions = [".bak", ".backup", ".old", ".orig", ".save", ".tmp"]
-        common_files = ["index", "config", "database", "db", "admin", "login"]
-        
         additional_vulns["checks_performed"].append("Backup file discovery")
-        found_backups = []
-        
-        if which("curl"):
-            for file in common_files:
-                for ext in backup_extensions:
-                    backup_url = f"{target.rstrip('/')}/{file}{ext}"
-                    try:
-                        result = run_cmd(["curl", "-I", "-s", "-k", "-m", "5", backup_url], 
-                                       capture=True, timeout=10, check_return=False)
-                        if result.stdout and "200 OK" in result.stdout:
-                            found_backups.append(f"{file}{ext}")
-                    except Exception:
-                        continue
-        
+        found_backups = _check_backup_files(target)
         if found_backups:
             additional_vulns["vulnerabilities"].append({
-                "type": "Exposed Backup Files",
+                "type": "Exposed Backup Files", 
                 "severity": "high",
                 "description": f"Found {len(found_backups)} potential backup files",
                 "details": found_backups
@@ -2333,42 +2649,31 @@ def perform_additional_checks(target: str, target_dir: Path, out_file: Path, cfg
         
         # Check robots.txt for sensitive information
         additional_vulns["checks_performed"].append("Robots.txt analysis")
-        if which("curl"):
-            try:
-                robots_url = f"{target.rstrip('/')}/robots.txt"
-                result = run_cmd(["curl", "-s", "-k", "-m", "10", robots_url], 
-                               capture=True, timeout=15, check_return=False)
-                if result.stdout and "disallow" in result.stdout.lower():
-                    disallowed = []
-                    for line in result.stdout.split('\n'):
-                        if line.lower().startswith('disallow:'):
-                            path = line.split(':', 1)[1].strip()
-                            if path and path != '/':
-                                disallowed.append(path)
-                    
-                    if disallowed:
-                        additional_vulns["vulnerabilities"].append({
-                            "type": "Robots.txt Information Disclosure",
-                            "severity": "low",
-                            "description": "Robots.txt reveals potentially sensitive paths",
-                            "details": disallowed[:10]  # Limit to first 10
-                        })
-            except Exception:
-                pass
+        disallowed_paths = _check_robots_txt(target)
+        if disallowed_paths:
+            additional_vulns["vulnerabilities"].append({
+                "type": "Robots.txt Information Disclosure",
+                "severity": "low", 
+                "description": "Robots.txt reveals potentially sensitive paths",
+                "details": disallowed_paths
+            })
         
-        # Generate recommendations based on findings
+        # Generate recommendations
         if additional_vulns["vulnerabilities"]:
             additional_vulns["recommendations"].extend([
                 "Review and secure exposed admin panels",
                 "Remove or protect backup files",
-                "Implement proper access controls",
+                "Implement proper access controls", 
                 "Regular security assessments"
             ])
         
-        atomic_write(out_file, json.dumps(additional_vulns, indent=2))
-        
-    except Exception as e:
-        logger.log(f"Additional checks error: {e}", "WARNING")
+        return atomic_write(out_file, json.dumps(additional_vulns, indent=2))
+    
+    safe_execute(
+        _perform_checks,
+        default=False,
+        error_msg="Additional checks failed"
+    )
 
 def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
     logger.log("Enhanced reporting stage started", "INFO")
@@ -3110,9 +3415,7 @@ def run_full_pipeline():
     cfg = load_cfg()
     env = env_with_lists()
     rd = new_run()
-    stop_event = threading.Event()
-    th = threading.Thread(target=resource_monitor, args=(cfg, stop_event), daemon=True)
-    th.start()
+    stop_event, th = create_resource_monitor_thread(cfg)
     
     try:
         logger.log("[START] Starting full security assessment pipeline", "INFO")
@@ -3142,8 +3445,7 @@ def run_full_pipeline():
                     logger.log(f"[REPORT] View report at: {html_report}", "INFO")
         
     finally:
-        stop_event.set()
-        th.join()
+        cleanup_resource_monitor(stop_event, th)
 
 def settings_menu():
     """Enhanced settings and configuration menu"""
@@ -3615,17 +3917,30 @@ def manage_targets():
             input("\nEnter to continue...")
         elif s == "2":
             t = input("Enter target (domain or URL): ").strip()
-            if t:
-                write_uniq(TARGETS, read_lines(TARGETS) + [t])
-                logger.log("Target added", "SUCCESS")
+            if t and validate_input(t, max_length=200):
+                # Basic domain/URL validation pattern
+                import re
+                domain_pattern = r'^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$'
+                url_pattern = r'^https?://[^\s/$.?#].[^\s]*$'
+                
+                if re.match(domain_pattern, t) or re.match(url_pattern, t):
+                    write_uniq(TARGETS, read_lines(TARGETS) + [t])
+                    logger.log("Target added", "SUCCESS")
+                else:
+                    logger.log("Invalid target format. Use domain.com or http://domain.com", "ERROR")
+            elif t:
+                logger.log("Invalid or potentially dangerous target input", "ERROR")
         elif s == "3":
             p = input("Path to file: ").strip()
-            fp = Path(p)
-            if fp.exists():
-                write_uniq(TARGETS, read_lines(TARGETS) + read_lines(fp))
-                logger.log("Imported", "SUCCESS")
+            if p and validate_input(p, max_length=500):
+                fp = Path(p)
+                if fp.exists() and fp.is_file():
+                    write_uniq(TARGETS, read_lines(TARGETS) + read_lines(fp))
+                    logger.log("Imported", "SUCCESS")
+                else:
+                    logger.log("File not found or not a regular file", "ERROR")
             else:
-                logger.log("File not found", "ERROR")
+                logger.log("Invalid or potentially dangerous file path", "ERROR")
         elif s == "4":
             if input("Confirm clear? (yes/no): ").strip().lower() == "yes":
                 atomic_write(TARGETS, "")
@@ -3645,29 +3960,23 @@ def run_recon():
     cfg = load_cfg()
     env = env_with_lists()
     rd = new_run()
-    stop_event = threading.Event()
-    th = threading.Thread(target=resource_monitor, args=(cfg, stop_event), daemon=True)
-    th.start()
+    stop_event, th = create_resource_monitor_thread(cfg)
     try:
         stage_recon(rd, env, cfg)
         logger.log(f"Recon complete. Run: {rd}", "SUCCESS")
     finally:
-        stop_event.set()
-        th.join()
+        cleanup_resource_monitor(stop_event, th)
 
 def run_vuln():
     cfg = load_cfg()
     env = env_with_lists()
     rd = new_run()
-    stop_event = threading.Event()
-    th = threading.Thread(target=resource_monitor, args=(cfg, stop_event), daemon=True)
-    th.start()
+    stop_event, th = create_resource_monitor_thread(cfg)
     try:
         stage_vuln_scan(rd, env, cfg)
         logger.log(f"Vuln scan complete. Run: {rd}", "SUCCESS")
     finally:
-        stop_event.set()
-        th.join()
+        cleanup_resource_monitor(stop_event, th)
 
 def run_report_for_latest():
     cfg = load_cfg()
