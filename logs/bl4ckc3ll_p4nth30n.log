@@ -64,3 +64,35 @@
 2025-09-08 15:30:51 - ERROR - Please install missing system tools using your package manager
 2025-09-08 15:30:51 - WARNING - ⚠️ Some dependencies missing. Please run install.sh or install manually.
 2025-09-08 15:30:51 - WARNING - Continuing with available functionality...
+2025-09-08 18:24:03 - DEBUG - PATH updated
+2025-09-08 18:24:03 - INFO - Validating dependencies...
+2025-09-08 18:24:03 - DEBUG - psutil available for system monitoring
+2025-09-08 18:24:03 - DEBUG - distro available for OS detection
+2025-09-08 18:24:03 - DEBUG - requests available for HTTP operations
+2025-09-08 18:24:03 - INFO - Security tools available: 0/19
+2025-09-08 18:24:03 - INFO - Core tools available: 0/6
+2025-09-08 18:24:03 - WARNING - Missing security tools:
+2025-09-08 18:24:03 - WARNING -   [91msubfinder[0m (CORE): github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+2025-09-08 18:24:03 - WARNING -   [91mhttpx[0m (CORE): github.com/projectdiscovery/httpx/cmd/httpx@latest
+2025-09-08 18:24:03 - WARNING -   [91mnaabu[0m (CORE): github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+2025-09-08 18:24:03 - WARNING -   [91mnuclei[0m (CORE): github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+2025-09-08 18:24:03 - WARNING -   [91mkatana[0m (CORE): github.com/projectdiscovery/katana/cmd/katana@latest
+2025-09-08 18:24:03 - WARNING -   [91mgau[0m (CORE): github.com/lc/gau/v2/cmd/gau@latest
+2025-09-08 18:24:03 - WARNING -   [93mamass[0m (ENHANCED): github.com/owasp-amass/amass/v4/cmd/amass@master
+2025-09-08 18:24:03 - WARNING -   [93mmasscan[0m (ENHANCED): apt install masscan
+2025-09-08 18:24:03 - WARNING -   [93mgobuster[0m (ENHANCED): go install github.com/OJ/gobuster/v3@latest
+2025-09-08 18:24:03 - WARNING -   [93mdirb[0m (ENHANCED): apt install dirb
+2025-09-08 18:24:03 - WARNING -   [93mffuf[0m (ENHANCED): go install github.com/ffuf/ffuf/v2@latest
+2025-09-08 18:24:03 - WARNING -   [93mwaybackurls[0m (ENHANCED): go install github.com/tomnomnom/waybackurls@latest
+2025-09-08 18:24:03 - WARNING -   [93mgospider[0m (ENHANCED): go install github.com/jaeles-project/gospider@latest
+2025-09-08 18:24:03 - WARNING -   [93msubjack[0m (ENHANCED): go install github.com/haccer/subjack@latest
+2025-09-08 18:24:03 - WARNING -   [93mwhatweb[0m (ENHANCED): apt install whatweb
+2025-09-08 18:24:03 - WARNING -   [93mwappalyzer[0m (ENHANCED): npm install -g wappalyzer
+2025-09-08 18:24:03 - WARNING -   [93mnikto[0m (ENHANCED): apt install nikto
+2025-09-08 18:24:03 - WARNING -   [93msqlmap[0m (ENHANCED): apt install sqlmap
+2025-09-08 18:24:03 - WARNING -   [93mcommix[0m (ENHANCED): apt install commix
+2025-09-08 18:24:03 - INFO - Run the install.sh script to automatically install missing tools
+2025-09-08 18:24:03 - ERROR - Essential system tools missing: whois
+2025-09-08 18:24:03 - ERROR - Please install missing system tools using your package manager
+2025-09-08 18:24:03 - WARNING - ⚠️ Some dependencies missing. Please run install.sh or install manually.
+2025-09-08 18:24:03 - WARNING - Continuing with available functionality...
