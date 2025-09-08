@@ -160,3 +160,4 @@
 2025-09-08 18:40:46 - ERROR - Please install missing system tools using your package manager
 2025-09-08 18:40:46 - WARNING - ⚠️ Some dependencies missing. Please run install.sh or install manually.
 2025-09-08 18:40:46 - WARNING - Continuing with available functionality...
+2025-09-08 19:47:48 - DEBUG - PATH updated

