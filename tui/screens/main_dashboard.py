@@ -22,6 +22,13 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
+# Import backend integration
+try:
+    from ..backend_integration import scan_manager, config_manager, target_manager, report_manager
+    HAS_BACKEND = True
+except ImportError:
+    HAS_BACKEND = False
+
 
 class SystemInfoWidget(Static):
     """System information display widget"""
@@ -126,17 +133,35 @@ class QuickActionsPanel(Static):
     @on(Button.Pressed, "#btn-full-scan")
     def start_full_scan(self):
         """Start a full security scan"""
-        self.app.action_scan()
+        if HAS_BACKEND and scan_manager:
+            success = scan_manager.start_full_scan()
+            if success:
+                self.app.action_scan()
+            else:
+                # Show error message
+                pass
+        else:
+            self.app.action_scan()
         
     @on(Button.Pressed, "#btn-quick-recon")  
     def quick_recon(self):
         """Start quick reconnaissance"""
-        self.app.action_scan()
+        if HAS_BACKEND and scan_manager:
+            success = scan_manager.start_recon_scan()
+            if success:
+                self.app.action_scan()
+        else:
+            self.app.action_scan()
         
     @on(Button.Pressed, "#btn-vuln-scan")
     def vuln_scan(self):
         """Start vulnerability scan"""
-        self.app.action_scan()
+        if HAS_BACKEND and scan_manager:
+            success = scan_manager.start_vuln_scan()
+            if success:
+                self.app.action_scan()
+        else:
+            self.app.action_scan()
         
     @on(Button.Pressed, "#btn-report")
     def generate_report(self):

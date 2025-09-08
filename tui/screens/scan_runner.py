@@ -12,6 +12,13 @@ import threading
 import time
 from datetime import datetime
 
+# Import backend integration
+try:
+    from ..backend_integration import scan_manager, target_manager
+    HAS_BACKEND = True
+except ImportError:
+    HAS_BACKEND = False
+
 
 class ScanConfigPanel(Static):
     """Scan configuration and options panel"""
@@ -63,14 +70,41 @@ class ScanControlPanel(Static):
     @on(Button.Pressed, "#btn-start-scan")
     def start_scan(self):
         """Start the security scan"""
+        # Get scan configuration
+        scan_type_select = self.parent.query_one("#scan-type", Select)
+        target_input = self.parent.query_one("#target-input", Input)
+        
+        scan_type = scan_type_select.value if scan_type_select else "full"
+        target = target_input.value.strip() if target_input else ""
+        
         # Enable/disable buttons
         self.query_one("#btn-start-scan").disabled = True
         self.query_one("#btn-stop-scan").disabled = False
         self.query_one("#btn-pause-scan").disabled = False
         
-        # Start scan in background
-        scan_runner = self.parent.query_one("#scan-progress")
-        scan_runner.start_scan()
+        # Start scan using backend if available
+        if HAS_BACKEND and scan_manager:
+            # Set up progress callback
+            scan_progress = self.parent.query_one("#scan-progress")
+            scan_manager.set_progress_callback(scan_progress.update_from_backend)
+            
+            # Start appropriate scan type
+            if scan_type == "recon":
+                success = scan_manager.start_recon_scan([target] if target else None)
+            elif scan_type == "vuln":  
+                success = scan_manager.start_vuln_scan([target] if target else None)
+            else:
+                success = scan_manager.start_full_scan([target] if target else None)
+                
+            if not success:
+                # Re-enable start button if scan failed to start
+                self.query_one("#btn-start-scan").disabled = False
+                self.query_one("#btn-stop-scan").disabled = True
+                self.query_one("#btn-pause-scan").disabled = True
+        else:
+            # Start simulated scan
+            scan_runner = self.parent.query_one("#scan-progress")
+            scan_runner.start_scan()
         
     @on(Button.Pressed, "#btn-stop-scan")
     def stop_scan(self):
@@ -80,9 +114,13 @@ class ScanControlPanel(Static):
         self.query_one("#btn-pause-scan").disabled = True
         self.query_one("#btn-resume-scan").disabled = True
         
-        # Stop scan
-        scan_runner = self.parent.query_one("#scan-progress")
-        scan_runner.stop_scan()
+        # Stop scan using backend if available
+        if HAS_BACKEND and scan_manager:
+            scan_manager.stop_scan()
+        else:
+            # Stop simulated scan
+            scan_runner = self.parent.query_one("#scan-progress")
+            scan_runner.stop_scan()
 
 
 class ScanProgressPanel(Static):
@@ -128,6 +166,26 @@ class ScanProgressPanel(Static):
         self.query_one("#scan-status").update("Status: Stopped")
         self.query_one("#scan-status").classes = "status-stopped"
         
+    def update_from_backend(self, progress, phase, status):
+        """Update progress from backend scan manager"""
+        self.query_one("#scan-status").update(f"Status: {status}")
+        self.query_one("#current-phase").update(f"Phase: {phase}")
+        self.query_one("#phase-details").update(f"Executing: {phase}")
+        self.query_one("#overall-progress").progress = progress
+        
+        # Update status classes for styling
+        status_widget = self.query_one("#scan-status")
+        if status == "Running":
+            status_widget.classes = "status-running"
+        elif status in ["Complete", "Completed"]:
+            status_widget.classes = "status-complete"
+        elif status in ["Error", "Failed"]:
+            status_widget.classes = "status-error"
+        elif status in ["Stopped"]:
+            status_widget.classes = "status-stopped"
+        else:
+            status_widget.classes = "status-idle"
+            
     def _progress_monitor(self):
         """Monitor scan progress in background"""
         phases = [
