@@ -2572,7 +2572,7 @@ def generate_risk_recommendations(risk_level: str, severity_counts: Dict[str, in
     recommendations = []
     
     if severity_counts["critical"] > 0:
-        recommendations.append("🚨 IMMEDIATE ACTION REQUIRED: Critical vulnerabilities found")
+        recommendations.append("[CRITICAL] IMMEDIATE ACTION REQUIRED: Critical vulnerabilities found")
         recommendations.append("• Patch critical vulnerabilities immediately")
         recommendations.append("• Consider taking affected systems offline until patched")
     
@@ -2621,7 +2621,7 @@ def extract_key_findings(vuln_results: Dict[str, Any]) -> List[str]:
         
         # Critical findings
         if nuclei_parsed.get("critical"):
-            findings.append(f"🚨 {target}: {len(nuclei_parsed['critical'])} critical vulnerabilities")
+            findings.append(f"[ALERT] {target}: {len(nuclei_parsed['critical'])} critical vulnerabilities")
         
         # Security headers issues
         headers = data.get("security_headers", {})
@@ -2720,7 +2720,7 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
             # Technology stack
             tech_info = ""
             if data.get("technology_stack"):
-                tech_info = f"<h5>🔧 Technology Stack</h5><pre>{esc(json.dumps(data['technology_stack'], indent=2)[:500])}</pre>"
+                tech_info = f"<h5>[TECH] Technology Stack</h5><pre>{esc(json.dumps(data['technology_stack'], indent=2)[:500])}</pre>"
             
             # Network info
             network_info = ""
@@ -2731,14 +2731,14 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
             
             chunks.append(f"""
             <div class="target-section">
-              <h3>🎯 Target: {esc(target)}</h3>
+              <h3>[TARGET] Target: {esc(target)}</h3>
               <div class="info-grid">
                 <div class="info-box">
-                  <h4>🔍 Subdomains ({len(data['subdomains'])})</h4>
+                  <h4>[RECON] Subdomains ({len(data['subdomains'])})</h4>
                   <ul class="subdomain-list">{subs}</ul>
                 </div>
                 <div class="info-box">
-                  <h4>🔌 Open Ports ({len(data['open_ports'])})</h4>
+                  <h4>[PORTS] Open Ports ({len(data['open_ports'])})</h4>
                   <ul class="port-list">{ports}</ul>
                 </div>
               </div>
@@ -2759,7 +2759,7 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
             if total_vulns > 0:
                 vuln_summary = f"""
                 <div class="vuln-summary">
-                  <h4>📊 Vulnerability Summary</h4>
+                  <h4>[REPORT] Vulnerability Summary</h4>
                   <div class="severity-grid">
                     <span class="severity critical">Critical: {len(nuclei_parsed.get('critical', []))}</span>
                     <span class="severity high">High: {len(nuclei_parsed.get('high', []))}</span>
@@ -2774,7 +2774,7 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
             for severity in ["critical", "high", "medium", "low"]:
                 findings = nuclei_parsed.get(severity, [])
                 if findings:
-                    findings_html += f"<h5 class='severity-header {severity}'>🚨 {severity.title()} ({len(findings)})</h5>"
+                    findings_html += f"<h5 class='severity-header {severity}'>[ALERT] {severity.title()} ({len(findings)})</h5>"
                     findings_html += "<ul class='findings-list'>"
                     for finding in findings[:10]:  # Limit to first 10 per severity
                         info = finding.get("info", {})
@@ -2799,7 +2799,7 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
             
             chunks.append(f"""
             <div class="target-section">
-              <h3>🎯 Target: {esc(target)}</h3>
+              <h3>[TARGET] Target: {esc(target)}</h3>
               {vuln_summary}
               {findings_html}
               {additional_checks}
@@ -2812,7 +2812,7 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
     
     summary_html = f"""
     <div class="executive-summary">
-      <h2>📈 Executive Summary</h2>
+      <h2>[SUMMARY] Executive Summary</h2>
       <div class="summary-grid">
         <div class="summary-item">
           <span class="number">{exec_summary.get('targets_scanned', 0)}</span>
@@ -2833,7 +2833,7 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
       </div>
       
       <div class="key-findings">
-        <h3>🔍 Key Findings</h3>
+        <h3>[RECON] Key Findings</h3>
         <ul>
           {"".join(f"<li>{esc(finding)}</li>" for finding in exec_summary.get('key_findings', []))}
         </ul>
@@ -2851,7 +2851,7 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>🛡️ Penetration Test Report - {esc(report_data['run_id'])}</title>
+  <title>[SECURITY] Penetration Test Report - {esc(report_data['run_id'])}</title>
   <style>
     body {{ 
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
@@ -2973,7 +2973,7 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
 </head>
 <body>
   <div class="header">
-    <h1>🛡️ Bl4ckC3ll_PANTHEON Security Assessment</h1>
+    <h1>[SECURITY] Bl4ckC3ll_PANTHEON Security Assessment</h1>
     <p><strong>Run ID:</strong> {esc(report_data['run_id'])}</p>
     <p><strong>Generated:</strong> {esc(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}</p>
   </div>
@@ -2981,17 +2981,17 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
   {summary_html}
 
   <div class="section">
-    <h2>🎯 Target Information</h2>
+    <h2>[TARGET] Target Information</h2>
     <ul>{"".join(f"<li><strong>{esc(t)}</strong></li>" for t in report_data["targets"])}</ul>
   </div>
 
   <div class="section">
-    <h2>🔍 Reconnaissance Results</h2>
+    <h2>[RECON] Reconnaissance Results</h2>
     {html_recon()}
   </div>
 
   <div class="section">
-    <h2>🚨 Vulnerability Assessment</h2>
+    <h2>[ALERT] Vulnerability Assessment</h2>
     {html_vuln()}
   </div>
 
@@ -3072,31 +3072,32 @@ def display_menu():
     print("\n\033[31m" + "="*80 + "\033[0m")
     print("\033[91m" + "BL4CKC3LL_P4NTH30N - ENHANCED SECURITY TESTING FRAMEWORK".center(80) + "\033[0m")
     print("\033[31m" + "="*80 + "\033[0m")
-    print("\033[93m1. 🎯 Manage Targets\033[0m")
-    print("\033[93m2. 🔄 Refresh Sources + Merge Wordlists\033[0m")
-    print("\033[93m3. 🔍 Enhanced Reconnaissance\033[0m")
-    print("\033[93m4. 🚨 Advanced Vulnerability Scan\033[0m")
-    print("\033[93m5. 🔗 Full Pipeline (Recon + Vuln + Report)\033[0m")
-    print("\033[93m6. 📊 Generate Enhanced Report\033[0m")
-    print("\033[93m7. 🔧 Settings & Configuration\033[0m")
-    print("\033[93m8. 🔌 Plugins Management\033[0m")
-    print("\033[93m9. 📈 View Last Report\033[0m")
-    print("\033[93m10. 🧪 Network Analysis Tools\033[0m")
-    print("\033[93m11. 🛡️ Security Assessment Summary\033[0m")
-    print("\033[92m12. 🤖 AI-Powered Vulnerability Analysis\033[0m")
-    print("\033[92m13. ☁️ Cloud Security Assessment\033[0m")
-    print("\033[92m14. 🔌 API Security Testing\033[0m")
-    print("\033[92m15. 📋 Compliance & Risk Assessment\033[0m")
-    print("\033[92m16. 🚀 CI/CD Integration Mode\033[0m")
-    print("\033[91m17. 🚪 Exit\033[0m")
+    print("\033[93m1. [TARGET] Manage Targets\033[0m")
+    print("\033[93m2. [REFRESH] Refresh Sources + Merge Wordlists\033[0m")
+    print("\033[93m3. [RECON] Enhanced Reconnaissance\033[0m")
+    print("\033[93m4. [VULN] Advanced Vulnerability Scan\033[0m")
+    print("\033[93m5. [FULL] Full Pipeline (Recon + Vuln + Report)\033[0m")
+    print("\033[93m6. [REPORT] Generate Enhanced Report\033[0m")
+    print("\033[93m7. [CONFIG] Settings & Configuration\033[0m")
+    print("\033[93m8. [PLUGIN] Plugins Management\033[0m")
+    print("\033[93m9. [VIEW] View Last Report\033[0m")
+    print("\033[93m10. [NET] Network Analysis Tools\033[0m")
+    print("\033[93m11. [ASSESS] Security Assessment Summary\033[0m")
+    print("\033[92m12. [AI] AI-Powered Vulnerability Analysis\033[0m")
+    print("\033[92m13. [CLOUD] Cloud Security Assessment\033[0m")
+    print("\033[92m14. [API] API Security Testing\033[0m")
+    print("\033[92m15. [COMPLY] Compliance & Risk Assessment\033[0m")
+    print("\033[92m16. [CICD] CI/CD Integration Mode\033[0m")
+    print("\033[92m18. [TUI] Launch Advanced TUI Interface\033[0m")
+    print("\033[91m17. [EXIT] Exit\033[0m")
     print("\033[31m" + "="*80 + "\033[0m")
 
 def get_choice() -> int:
     try:
-        s = input("\n\033[93mSelect (1-17): \033[0m").strip()
+        s = input("\n\033[93mSelect (1-18): \033[0m").strip()
         if s.isdigit():
             n = int(s)
-            if 1 <= n <= 17:
+            if 1 <= n <= 18:
                 return n
     except (EOFError, KeyboardInterrupt):
         return 17
@@ -3114,7 +3115,7 @@ def run_full_pipeline():
     th.start()
     
     try:
-        logger.log("🚀 Starting full security assessment pipeline", "INFO")
+        logger.log("[START] Starting full security assessment pipeline", "INFO")
         
         # Phase 1: Enhanced Reconnaissance
         logger.log("Phase 1: Enhanced Reconnaissance", "INFO")
@@ -3136,9 +3137,9 @@ def run_full_pipeline():
             if html_report.exists():
                 try:
                     webbrowser.open(html_report.as_uri())
-                    logger.log("📊 Report opened in browser", "SUCCESS")
+                    logger.log("[REPORT] Report opened in browser", "SUCCESS")
                 except Exception:
-                    logger.log(f"📊 View report at: {html_report}", "INFO")
+                    logger.log(f"[REPORT] View report at: {html_report}", "INFO")
         
     finally:
         stop_event.set()
@@ -3150,11 +3151,11 @@ def settings_menu():
         print("\n\033[31m" + "="*80 + "\033[0m")
         print("\033[91m" + "SETTINGS & CONFIGURATION".center(80) + "\033[0m")
         print("\033[31m" + "="*80 + "\033[0m")
-        print("\033[93m1. 🔧 View Current Configuration\033[0m")
+        print("\033[93m1. [TECH] View Current Configuration\033[0m")
         print("\033[93m2. ⚙️ Scan Settings\033[0m")
-        print("\033[93m3. 📊 Report Settings\033[0m")
+        print("\033[93m3. [REPORT] Report Settings\033[0m")
         print("\033[93m4. 🌐 Network Settings\033[0m")
-        print("\033[93m5. 🛡️ Security Settings\033[0m")
+        print("\033[93m5. [SECURITY] Security Settings\033[0m")
         print("\033[93m6. 🔄 Reset to Defaults\033[0m")
         print("\033[93m7. 💾 Save Configuration\033[0m")
         print("\033[91m8. ⬅️ Back to Main Menu\033[0m")
@@ -3181,7 +3182,7 @@ def settings_menu():
                 configure_security_settings(cfg)
                 
             elif choice == "6":
-                if input("\n⚠️ Reset all settings to defaults? (yes/no): ").lower() == "yes":
+                if input("\n[WARNING] Reset all settings to defaults? (yes/no): ").lower() == "yes":
                     save_cfg(DEFAULT_CFG)
                     logger.log("Configuration reset to defaults", "SUCCESS")
                     
@@ -3344,7 +3345,7 @@ def network_tools_menu():
         print("\033[91m" + "NETWORK ANALYSIS TOOLS".center(80) + "\033[0m")
         print("\033[31m" + "="*80 + "\033[0m")
         print("\033[93m1. 🌐 WHOIS Lookup\033[0m")
-        print("\033[93m2. 🔍 DNS Enumeration\033[0m")
+        print("\033[93m2. [RECON] DNS Enumeration\033[0m")
         print("\033[93m3. 🛣️ Traceroute Analysis\033[0m")
         print("\033[93m4. 🏢 ASN Lookup\033[0m")
         print("\033[93m5. 🔒 SSL Certificate Analysis\033[0m")
@@ -3544,10 +3545,10 @@ def security_assessment_summary():
         exec_summary = report_data.get("executive_summary", {})
         risk_assessment = report_data.get("risk_assessment", {})
         
-        print(f"\033[93m📊 Run ID:\033[0m {report_data.get('run_id', 'Unknown')}")
-        print(f"\033[93m🎯 Targets Scanned:\033[0m {exec_summary.get('targets_scanned', 0)}")
-        print(f"\033[93m🔍 Subdomains Found:\033[0m {exec_summary.get('subdomains_discovered', 0)}")
-        print(f"\033[93m🔌 Open Ports:\033[0m {exec_summary.get('open_ports_found', 0)}")
+        print(f"\033[93m[REPORT] Run ID:\033[0m {report_data.get('run_id', 'Unknown')}")
+        print(f"\033[93m[TARGET] Targets Scanned:\033[0m {exec_summary.get('targets_scanned', 0)}")
+        print(f"\033[93m[RECON] Subdomains Found:\033[0m {exec_summary.get('subdomains_discovered', 0)}")
+        print(f"\033[93m[PORTS] Open Ports:\033[0m {exec_summary.get('open_ports_found', 0)}")
         print(f"\033[93m🌐 HTTP Services:\033[0m {exec_summary.get('http_services_identified', 0)}")
         
         # Risk assessment
@@ -3560,13 +3561,13 @@ def security_assessment_summary():
             'INFORMATIONAL': '\033[94m'  # Blue
         }.get(risk_level, '\033[0m')
         
-        print(f"\n\033[93m🛡️ Overall Risk Level:\033[0m {risk_color}{risk_level}\033[0m")
+        print(f"\n\033[93m[SECURITY] Overall Risk Level:\033[0m {risk_color}{risk_level}\033[0m")
         
         # Severity breakdown
         severity_counts = risk_assessment.get('severity_breakdown', {})
         if any(severity_counts.values()):
-            print(f"\n\033[93m📈 Vulnerability Breakdown:\033[0m")
-            print(f"  🚨 Critical: {severity_counts.get('critical', 0)}")
+            print(f"\n\033[93m[SUMMARY] Vulnerability Breakdown:\033[0m")
+            print(f"  [ALERT] Critical: {severity_counts.get('critical', 0)}")
             print(f"  🔴 High: {severity_counts.get('high', 0)}")
             print(f"  🟡 Medium: {severity_counts.get('medium', 0)}")
             print(f"  🟢 Low: {severity_counts.get('low', 0)}")
@@ -3575,7 +3576,7 @@ def security_assessment_summary():
         # Key findings
         key_findings = exec_summary.get('key_findings', [])
         if key_findings:
-            print(f"\n\033[93m🔍 Key Findings:\033[0m")
+            print(f"\n\033[93m[RECON] Key Findings:\033[0m")
             for finding in key_findings[:5]:  # Show top 5
                 print(f"  • {finding}")
         
@@ -3741,7 +3742,7 @@ def run_ai_vulnerability_analysis():
             with open(ml_out, 'r') as f:
                 results = json.load(f)
             
-            print(f"\n📊 AI Analysis Results:")
+            print(f"\n[REPORT] AI Analysis Results:")
             print(f"   False Positive Reduction: {results.get('false_positive_reduction', {}).get('reduction_percentage', 0):.1f}%")
             print(f"   Risk Level: {results.get('risk_scoring', {}).get('risk_level', 'unknown').upper()}")
             print(f"   Total Risk Score: {results.get('risk_scoring', {}).get('total_risk_score', 0)}")
@@ -3870,7 +3871,7 @@ def run_cicd_integration_mode():
             print("\nGenerated files:")
             print("📁 .github/workflows/security_scan.yml - GitHub Actions workflow")
             print("🐳 Dockerfile - Container for deployment")
-            print("🚀 cicd_integration.py - CI/CD integration script")
+            print("[START] cicd_integration.py - CI/CD integration script")
             
             print("\nUsage examples:")
             print("# CLI usage:")
@@ -3902,11 +3903,11 @@ def main():
     ensure_layout()
     print(BANNER)
     print(f"\033[91m{APP} v{VERSION}-ENHANCED\033[0m by {AUTHOR}")
-    print(f"\033[93m🛡️ Advanced Security Testing Framework with Enhanced Capabilities 🛡️\033[0m")
+    print(f"\033[93m[SECURITY] Advanced Security Testing Framework with Enhanced Capabilities 🛡️\033[0m")
     
     # Validate dependencies and environment
     if not validate_dependencies():
-        logger.log("⚠️ Some dependencies missing. Please run install.sh or install manually.", "WARNING")
+        logger.log("[WARNING] Some dependencies missing. Please run install.sh or install manually.", "WARNING")
         logger.log("Continuing with available functionality...", "WARNING")
         time.sleep(2)
     
@@ -3950,8 +3951,38 @@ def main():
         elif c == 16:
             run_cicd_integration_mode()
         elif c == 17:
-            logger.log("🚪 Goodbye! Stay secure! 🛡️", "INFO")
+            logger.log("Goodbye! Stay secure!", "INFO")
             break
+        elif c == 18:
+            launch_advanced_tui()
+
+def launch_advanced_tui():
+    """Launch the advanced Terminal User Interface"""
+    try:
+        logger.log("Launching Advanced TUI Interface...", "INFO")
+        import subprocess
+        
+        # Launch the TUI in a subprocess
+        tui_script = HERE / "tui_launcher.py"
+        if tui_script.exists():
+            subprocess.run([sys.executable, str(tui_script)])
+        else:
+            logger.log("TUI launcher not found. Using fallback import method.", "WARNING")
+            
+            # Try direct import
+            try:
+                from tui.app import PantheonTUI
+                app = PantheonTUI()
+                app.run()
+            except ImportError:
+                logger.log("TUI dependencies missing. Install with: pip install textual", "ERROR")
+            except Exception as e:
+                logger.log(f"TUI launch failed: {e}", "ERROR")
+                
+    except Exception as e:
+        logger.log(f"Failed to launch TUI: {e}", "ERROR")
+    
+    input("Press Enter to continue...")
 
 def view_last_report():
     """View the last generated report"""
@@ -3967,9 +3998,9 @@ def view_last_report():
         if html_report.exists():
             try:
                 webbrowser.open(html_report.as_uri())
-                logger.log("📊 Report opened in browser", "SUCCESS")
+                logger.log("[REPORT] Report opened in browser", "SUCCESS")
             except Exception:
-                logger.log(f"📊 View report at: {html_report}", "INFO")
+                logger.log(f"[REPORT] View report at: {html_report}", "INFO")
         else:
             logger.log("HTML report not found, generating...", "WARNING")
             run_report_for_latest()
