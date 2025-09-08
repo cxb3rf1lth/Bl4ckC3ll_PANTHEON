@@ -3393,19 +3393,22 @@ def display_menu():
     print("\033[92m14. [API] API Security Testing\033[0m")
     print("\033[92m15. [COMPLY] Compliance & Risk Assessment\033[0m")
     print("\033[92m16. [CICD] CI/CD Integration Mode\033[0m")
-    print("\033[92m18. [TUI] Launch Advanced TUI Interface\033[0m")
-    print("\033[91m17. [EXIT] Exit\033[0m")
+    print("\033[96m17. [ESLINT] ESLint Security Check\033[0m")
+    print("\033[96m18. [BUGBOUNTY] Bug Bounty Automation\033[0m")
+    print("\033[96m19. [AUTOCHAIN] Automated Testing Chain\033[0m")
+    print("\033[92m20. [TUI] Launch Advanced TUI Interface\033[0m")
+    print("\033[91m21. [EXIT] Exit\033[0m")
     print("\033[31m" + "="*80 + "\033[0m")
 
 def get_choice() -> int:
     try:
-        s = input("\n\033[93mSelect (1-18): \033[0m").strip()
+        s = input("\n\033[93mSelect (1-21): \033[0m").strip()
         if s.isdigit():
             n = int(s)
-            if 1 <= n <= 18:
+            if 1 <= n <= 21:
                 return n
     except (EOFError, KeyboardInterrupt):
-        return 17
+        return 21
     except Exception:
         pass
     return 12
@@ -4022,6 +4025,355 @@ def plugins_menu():
             rd = new_run()
             execute_plugin(name, rd, env_with_lists(), load_cfg())
 
+# ---------- Enhanced Automation Functions ----------
+def run_eslint_security_check():
+    """Run ESLint security checks on JavaScript files"""
+    print("\n\033[96m=== ESLint Security Check ===\033[0m")
+    
+    try:
+        # Check if Node.js and npm are available
+        if not shutil.which("npm"):
+            logger.log("npm not found. Please install Node.js and npm for ESLint integration", "WARNING")
+            input("Press Enter to continue...")
+            return
+        
+        # Install ESLint dependencies if needed
+        package_json = HERE / "package.json"
+        if package_json.exists():
+            logger.log("Installing ESLint dependencies...", "INFO")
+            result = safe_execute(
+                run_cmd, 
+                ["npm", "install"], 
+                cwd=str(HERE),
+                timeout=120,
+                capture=True,
+                check_return=False
+            )
+            
+            if result and result.returncode == 0:
+                logger.log("ESLint dependencies installed successfully", "SUCCESS")
+            else:
+                logger.log("Failed to install ESLint dependencies", "WARNING")
+        
+        # Run ESLint security check
+        logger.log("Running ESLint security analysis...", "INFO")
+        result = safe_execute(
+            run_cmd,
+            ["npm", "run", "lint:security"],
+            cwd=str(HERE),
+            timeout=60,
+            capture=True,
+            check_return=False
+        )
+        
+        if result:
+            if result.returncode == 0:
+                logger.log("ESLint security check completed successfully", "SUCCESS")
+                if result.stdout:
+                    print(f"ESLint Output:\n{result.stdout}")
+            else:
+                logger.log("ESLint found security issues", "WARNING")
+                if result.stderr:
+                    print(f"ESLint Issues:\n{result.stderr}")
+        
+    except Exception as e:
+        logger.log(f"ESLint security check error: {e}", "ERROR")
+    
+    input("Press Enter to continue...")
+
+def run_bug_bounty_automation():
+    """Run comprehensive bug bounty automation"""
+    print("\n\033[96m=== Bug Bounty Automation ===\033[0m")
+    
+    try:
+        targets = read_lines(TARGETS)
+        if not targets:
+            logger.log("No targets configured. Please add targets first.", "WARNING")
+            input("Press Enter to continue...")
+            return
+        
+        # Get primary target (first one)
+        primary_target = targets[0].strip()
+        if primary_target.startswith(('http://', 'https://')):
+            # Extract domain from URL
+            from urllib.parse import urlparse
+            parsed = urlparse(primary_target)
+            primary_target = parsed.netloc
+        
+        logger.log(f"Starting bug bounty automation for: {primary_target}", "INFO")
+        
+        # Check if bug_bounty_commands.sh exists and is executable
+        bug_bounty_script = HERE / "bug_bounty_commands.sh"
+        if not bug_bounty_script.exists():
+            logger.log("bug_bounty_commands.sh not found", "ERROR")
+            input("Press Enter to continue...")
+            return
+        
+        # Make sure script is executable
+        import stat
+        current_perms = bug_bounty_script.stat().st_mode
+        bug_bounty_script.chmod(current_perms | stat.S_IEXEC)
+        
+        # Run bug bounty automation
+        logger.log("Executing comprehensive bug bounty reconnaissance...", "INFO")
+        
+        # Create a new run directory for bug bounty results
+        run_dir = new_run()
+        
+        # Execute the bug bounty script
+        result = safe_execute(
+            run_cmd,
+            [str(bug_bounty_script), primary_target],
+            cwd=str(HERE),
+            timeout=1800,  # 30 minutes timeout
+            capture=True,
+            check_return=False
+        )
+        
+        if result:
+            if result.returncode == 0:
+                logger.log("Bug bounty automation completed successfully", "SUCCESS")
+                
+                # Copy results to run directory
+                bug_bounty_results = HERE / "bug_bounty_results"
+                if bug_bounty_results.exists():
+                    import shutil as sh
+                    sh.copytree(bug_bounty_results, run_dir / "bug_bounty_results", dirs_exist_ok=True)
+                    logger.log(f"Results copied to: {run_dir / 'bug_bounty_results'}", "INFO")
+                
+            else:
+                logger.log(f"Bug bounty automation completed with warnings (exit code: {result.returncode})", "WARNING")
+            
+            # Show summary output
+            if result.stdout:
+                print(f"\nBug Bounty Summary:\n{result.stdout[-1000:]}")  # Last 1000 chars
+        else:
+            logger.log("Bug bounty automation failed to execute", "ERROR")
+        
+    except Exception as e:
+        logger.log(f"Bug bounty automation error: {e}", "ERROR")
+    
+    input("Press Enter to continue...")
+
+def run_automated_testing_chain():
+    """Run comprehensive automated testing chain"""
+    print("\n\033[96m=== Automated Testing Chain ===\033[0m")
+    
+    try:
+        logger.log("Starting comprehensive automated testing chain...", "INFO")
+        
+        # Phase 1: ESLint Security Check
+        print("\n--- Phase 1: Code Quality & Security ---")
+        run_eslint_security_check()
+        
+        # Phase 2: Enhanced Reconnaissance  
+        print("\n--- Phase 2: Enhanced Reconnaissance ---")
+        run_enhanced_recon()
+        
+        # Phase 3: Bug Bounty Automation
+        print("\n--- Phase 3: Bug Bounty Automation ---")
+        run_bug_bounty_automation()
+        
+        # Phase 4: Advanced Vulnerability Scanning
+        print("\n--- Phase 4: Advanced Vulnerability Scanning ---") 
+        run_advanced_vuln_scan()
+        
+        # Phase 5: AI-Powered Analysis
+        print("\n--- Phase 5: AI-Powered Analysis ---")
+        run_ai_vulnerability_analysis()
+        
+        # Phase 6: Generate Comprehensive Report
+        print("\n--- Phase 6: Comprehensive Reporting ---")
+        generate_enhanced_report()
+        
+        logger.log("Automated testing chain completed successfully", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"Automated testing chain error: {e}", "ERROR")
+    
+    input("Press Enter to continue...")
+
+def run_enhanced_recon():
+    """Run enhanced reconnaissance with additional tools"""
+    print("\n\033[96m=== Enhanced Reconnaissance ===\033[0m")
+    
+    targets = read_lines(TARGETS)
+    if not targets:
+        logger.log("No targets configured", "WARNING")
+        return
+        
+    rd = new_run()
+    env = env_with_lists()
+    cfg = load_cfg()
+    
+    logger.log("Starting enhanced reconnaissance...", "INFO")
+    
+    # Enhanced subdomain enumeration
+    enhanced_subdomain_enum(targets, rd, cfg)
+    
+    # Enhanced port scanning
+    enhanced_port_scanning(targets, rd, cfg)
+    
+    # Technology detection
+    enhanced_tech_detection(targets, rd, cfg)
+    
+    # Web crawling and URL collection
+    enhanced_web_crawling(targets, rd, cfg)
+    
+    logger.log("Enhanced reconnaissance completed", "SUCCESS")
+
+def enhanced_subdomain_enum(targets, run_dir, cfg):
+    """Enhanced subdomain enumeration with multiple tools"""
+    logger.log("Running enhanced subdomain enumeration...", "INFO")
+    
+    for target in targets:
+        target = target.strip()
+        if not target:
+            continue
+            
+        # Use multiple subdomain enumeration tools
+        tools = ["subfinder", "amass", "assetfinder"]
+        results = []
+        
+        for tool in tools:
+            if shutil.which(tool):
+                logger.log(f"Running {tool} for {target}...", "DEBUG")
+                
+                if tool == "subfinder":
+                    result = safe_execute(
+                        run_cmd,
+                        ["subfinder", "-d", target, "-silent"],
+                        capture=True,
+                        timeout=300,
+                        check_return=False
+                    )
+                elif tool == "amass":
+                    result = safe_execute(
+                        run_cmd,
+                        ["amass", "enum", "-d", target, "-passive"],
+                        capture=True, 
+                        timeout=300,
+                        check_return=False
+                    )
+                elif tool == "assetfinder":
+                    result = safe_execute(
+                        run_cmd,
+                        ["assetfinder", "--subs-only", target],
+                        capture=True,
+                        timeout=300,
+                        check_return=False
+                    )
+                
+                if result and result.stdout:
+                    results.extend(result.stdout.strip().split('\n'))
+        
+        # Deduplicate and save results
+        if results:
+            unique_subdomains = sorted(set(filter(None, results)))
+            subdomain_file = run_dir / f"subdomains_{target.replace('.', '_')}.txt"
+            write_lines(subdomain_file, unique_subdomains)
+            logger.log(f"Found {len(unique_subdomains)} subdomains for {target}", "SUCCESS")
+
+def enhanced_port_scanning(targets, run_dir, cfg):
+    """Enhanced port scanning with multiple tools"""
+    logger.log("Running enhanced port scanning...", "INFO")
+    
+    for target in targets:
+        target = target.strip()
+        if not target:
+            continue
+            
+        # Use nmap for comprehensive port scanning
+        if shutil.which("nmap"):
+            logger.log(f"Running nmap scan for {target}...", "DEBUG")
+            
+            # Top 1000 ports scan
+            result = safe_execute(
+                run_cmd,
+                ["nmap", "-T4", "-top-ports", "1000", "--open", "-oG", "-", target],
+                capture=True,
+                timeout=600,
+                check_return=False
+            )
+            
+            if result and result.stdout:
+                ports_file = run_dir / f"ports_{target.replace('.', '_')}.txt"
+                with open(ports_file, 'w') as f:
+                    f.write(result.stdout)
+                logger.log(f"Port scan completed for {target}", "SUCCESS")
+
+def enhanced_tech_detection(targets, run_dir, cfg):
+    """Enhanced technology detection"""
+    logger.log("Running enhanced technology detection...", "INFO")
+    
+    for target in targets:
+        target = target.strip()
+        if not target:
+            continue
+            
+        # Ensure target has protocol
+        if not target.startswith(('http://', 'https://')):
+            target = f"https://{target}"
+            
+        # Use httpx for technology detection
+        if shutil.which("httpx"):
+            result = safe_execute(
+                run_cmd,
+                ["httpx", "-u", target, "-tech-detect", "-title", "-silent"],
+                capture=True,
+                timeout=60,
+                check_return=False
+            )
+            
+            if result and result.stdout:
+                tech_file = run_dir / f"tech_{target.replace('://', '_').replace('.', '_')}.txt"
+                with open(tech_file, 'w') as f:
+                    f.write(result.stdout)
+
+def enhanced_web_crawling(targets, run_dir, cfg):
+    """Enhanced web crawling for URL collection"""
+    logger.log("Running enhanced web crawling...", "INFO")
+    
+    for target in targets:
+        target = target.strip()
+        if not target:
+            continue
+            
+        # Use multiple crawling tools
+        all_urls = set()
+        
+        # GAU - Get All URLs
+        if shutil.which("gau"):
+            result = safe_execute(
+                run_cmd,
+                ["gau", target],
+                capture=True,
+                timeout=120,
+                check_return=False
+            )
+            if result and result.stdout:
+                all_urls.update(result.stdout.strip().split('\n'))
+        
+        # Waybackurls
+        if shutil.which("waybackurls"):
+            result = safe_execute(
+                run_cmd,
+                ["waybackurls", target],
+                capture=True,
+                timeout=120,
+                check_return=False
+            )
+            if result and result.stdout:
+                all_urls.update(result.stdout.strip().split('\n'))
+        
+        # Save collected URLs
+        if all_urls:
+            filtered_urls = [url for url in all_urls if url and url.startswith(('http://', 'https://'))]
+            if filtered_urls:
+                urls_file = run_dir / f"urls_{target.replace('.', '_')}.txt"
+                write_lines(urls_file, sorted(filtered_urls))
+                logger.log(f"Collected {len(filtered_urls)} URLs for {target}", "SUCCESS")
+
 # ---------- Enhanced Menu Functions ----------
 def run_ai_vulnerability_analysis():
     """Run AI-powered vulnerability analysis"""
@@ -4260,10 +4612,16 @@ def main():
         elif c == 16:
             run_cicd_integration_mode()
         elif c == 17:
+            run_eslint_security_check()
+        elif c == 18:
+            run_bug_bounty_automation()
+        elif c == 19:
+            run_automated_testing_chain()
+        elif c == 20:
+            launch_advanced_tui()
+        elif c == 21:
             logger.log("Goodbye! Stay secure!", "INFO")
             break
-        elif c == 18:
-            launch_advanced_tui()
 
 def launch_advanced_tui():
     """Launch the advanced Terminal User Interface"""
