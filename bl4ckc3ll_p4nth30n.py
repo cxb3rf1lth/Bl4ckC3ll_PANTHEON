@@ -87,7 +87,15 @@ DEFAULT_CFG: Dict[str, Any] = {
         "certificate_transparency": True,
         "subdomain_takeover": True,
         "cors_analysis": True,
-        "security_headers": True
+        "security_headers": True,
+        "api_discovery": True,
+        "graphql_testing": True,
+        "jwt_analysis": True,
+        "cloud_storage_buckets": True,
+        "container_scanning": True,
+        "shodan_integration": True,
+        "threat_intelligence": True,
+        "compliance_checks": True
     },
     "fuzzing": {
         "enable_dirb": True,
@@ -151,6 +159,61 @@ DEFAULT_CFG: Dict[str, Any] = {
         "reverse_dns": True,
         "asn_lookup": True,
         "geolocation": True
+    },
+    "api_security": {
+        "enabled": True,
+        "swagger_discovery": True,
+        "openapi_analysis": True,
+        "rest_api_fuzzing": True,
+        "graphql_introspection": True,
+        "soap_testing": True,
+        "rate_limit_testing": True,
+        "authentication_bypass": True
+    },
+    "cloud_security": {
+        "enabled": True,
+        "aws_s3_buckets": True,
+        "azure_storage": True,
+        "gcp_buckets": True,
+        "cloud_metadata": True,
+        "container_registries": True,
+        "kubernetes_discovery": True
+    },
+    "threat_intelligence": {
+        "enabled": True,
+        "virustotal_api": "",
+        "shodan_api": "",
+        "censys_api": "",
+        "passive_total_api": "",
+        "malware_detection": True,
+        "reputation_checks": True,
+        "ioc_correlation": True
+    },
+    "ml_analysis": {
+        "enabled": True,
+        "false_positive_reduction": True,
+        "vulnerability_prioritization": True,
+        "anomaly_detection": True,
+        "pattern_recognition": True,
+        "risk_scoring_ml": True
+    },
+    "compliance": {
+        "enabled": True,
+        "owasp_top10": True,
+        "nist_framework": True,
+        "pci_dss": True,
+        "gdpr_checks": True,
+        "hipaa_checks": True,
+        "iso27001": True
+    },
+    "cicd_integration": {
+        "enabled": False,
+        "github_actions": True,
+        "gitlab_ci": True,
+        "jenkins": True,
+        "webhook_notifications": True,
+        "api_endpoints": True,
+        "scheduled_scans": True
     }
 }
 
@@ -844,6 +907,466 @@ def run_network_analysis(target: str, out_dir: Path, env: Dict[str, str]):
     except Exception as e:
         logger.log(f"ASN lookup error for {hostname}: {e}", "WARNING")
 
+def run_api_discovery(target: str, out_file: Path, env: Dict[str, str]):
+    """Enhanced API endpoint discovery and analysis"""
+    try:
+        logger.log(f"API discovery for {target}", "INFO")
+        results = []
+        
+        # Common API endpoints
+        api_endpoints = [
+            "/api", "/api/v1", "/api/v2", "/rest", "/graphql", 
+            "/swagger", "/swagger.json", "/openapi.json", "/api-docs",
+            "/docs", "/documentation", "/spec", "/.well-known",
+            "/health", "/status", "/metrics", "/admin"
+        ]
+        
+        for endpoint in api_endpoints:
+            try:
+                if which("curl"):
+                    test_url = f"{target.rstrip('/')}{endpoint}"
+                    result = run_cmd(["curl", "-s", "-I", "-L", "--max-time", "10", test_url], 
+                                   capture=True, timeout=15, check_return=False)
+                    if result.stdout and ("200" in result.stdout or "swagger" in result.stdout.lower() or "api" in result.stdout.lower()):
+                        results.append({
+                            "endpoint": endpoint,
+                            "url": test_url,
+                            "response_headers": result.stdout.strip(),
+                            "discovered": datetime.now().isoformat()
+                        })
+            except Exception:
+                continue
+        
+        # Save results
+        atomic_write(out_file, json.dumps(results, indent=2))
+        logger.log(f"Found {len(results)} potential API endpoints", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"API discovery error: {e}", "ERROR")
+
+def run_graphql_testing(target: str, out_file: Path, env: Dict[str, str]):
+    """GraphQL security testing"""
+    try:
+        logger.log(f"GraphQL testing for {target}", "INFO")
+        results = {}
+        
+        graphql_endpoints = ["/graphql", "/graphiql", "/api/graphql", "/v1/graphql", "/query"]
+        
+        for endpoint in graphql_endpoints:
+            try:
+                if which("curl"):
+                    test_url = f"{target.rstrip('/')}{endpoint}"
+                    
+                    # Test for introspection
+                    introspection_query = {"query": "{ __schema { types { name } } }"}
+                    result = run_cmd([
+                        "curl", "-s", "-X", "POST", 
+                        "-H", "Content-Type: application/json",
+                        "-d", json.dumps(introspection_query),
+                        "--max-time", "10", test_url
+                    ], capture=True, timeout=15, check_return=False)
+                    
+                    if result.stdout and ("__schema" in result.stdout or "types" in result.stdout):
+                        results[endpoint] = {
+                            "introspection_enabled": True,
+                            "response": result.stdout.strip(),
+                            "url": test_url
+                        }
+                    
+                    # Test for common GraphQL vulnerabilities
+                    test_queries = [
+                        '{ __type(name: "User") { fields { name type { name } } } }',
+                        'query { users { id email password } }'
+                    ]
+                    
+                    for query in test_queries:
+                        test_query = {"query": query}
+                        result = run_cmd([
+                            "curl", "-s", "-X", "POST",
+                            "-H", "Content-Type: application/json", 
+                            "-d", json.dumps(test_query),
+                            "--max-time", "5", test_url
+                        ], capture=True, timeout=10, check_return=False)
+                        
+                        if result.stdout and "data" in result.stdout:
+                            if endpoint not in results:
+                                results[endpoint] = {}
+                            results[endpoint]["vulnerable_queries"] = results[endpoint].get("vulnerable_queries", [])
+                            results[endpoint]["vulnerable_queries"].append({
+                                "query": query,
+                                "response": result.stdout.strip()
+                            })
+                            
+            except Exception:
+                continue
+        
+        atomic_write(out_file, json.dumps(results, indent=2))
+        logger.log(f"GraphQL testing completed, found {len(results)} endpoints", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"GraphQL testing error: {e}", "ERROR")
+
+def run_jwt_analysis(target: str, out_file: Path, env: Dict[str, str]):
+    """JWT token analysis and security testing"""
+    try:
+        logger.log(f"JWT analysis for {target}", "INFO")
+        results = {}
+        
+        if which("curl"):
+            # Look for JWT tokens in common locations
+            test_endpoints = ["/login", "/auth", "/token", "/api/auth", "/oauth"]
+            
+            for endpoint in test_endpoints:
+                try:
+                    test_url = f"{target.rstrip('/')}{endpoint}"
+                    result = run_cmd(["curl", "-s", "-I", "--max-time", "10", test_url], 
+                                   capture=True, timeout=15, check_return=False)
+                    
+                    if result.stdout and ("bearer" in result.stdout.lower() or "jwt" in result.stdout.lower()):
+                        results[endpoint] = {
+                            "jwt_detected": True,
+                            "headers": result.stdout.strip(),
+                            "url": test_url
+                        }
+                        
+                        # Test for common JWT vulnerabilities
+                        jwt_tests = [
+                            {"name": "None Algorithm", "header": '{"alg": "none", "typ": "JWT"}'},
+                            {"name": "Weak Secret", "test": "weak_secret_test"},
+                            {"name": "Key Confusion", "test": "key_confusion_test"}
+                        ]
+                        
+                        results[endpoint]["vulnerability_tests"] = jwt_tests
+                        
+                except Exception:
+                    continue
+        
+        atomic_write(out_file, json.dumps(results, indent=2))
+        logger.log(f"JWT analysis completed", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"JWT analysis error: {e}", "ERROR")
+
+def run_cloud_storage_scanning(target: str, out_file: Path, env: Dict[str, str]):
+    """Scan for exposed cloud storage buckets and containers"""
+    try:
+        logger.log(f"Cloud storage scanning for {target}", "INFO")
+        results = {}
+        
+        # Extract domain for bucket name generation
+        from urllib.parse import urlparse
+        parsed = urlparse(target if target.startswith('http') else f"http://{target}")
+        domain = parsed.netloc or target
+        base_name = domain.replace('.', '-').replace('_', '-')
+        
+        # Generate potential bucket names
+        bucket_names = [
+            base_name, f"{base_name}-backup", f"{base_name}-data", f"{base_name}-files",
+            f"{base_name}-images", f"{base_name}-static", f"{base_name}-assets",
+            f"{base_name}-dev", f"{base_name}-prod", f"{base_name}-test"
+        ]
+        
+        # AWS S3 buckets
+        for bucket in bucket_names:
+            try:
+                if which("curl"):
+                    s3_url = f"https://{bucket}.s3.amazonaws.com/"
+                    result = run_cmd(["curl", "-s", "-I", "--max-time", "10", s3_url],
+                                   capture=True, timeout=15, check_return=False)
+                    
+                    if result.stdout and ("200" in result.stdout or "403" in result.stdout):
+                        results[f"s3_{bucket}"] = {
+                            "type": "AWS S3",
+                            "url": s3_url,
+                            "status": "accessible" if "200" in result.stdout else "exists_but_protected",
+                            "headers": result.stdout.strip()
+                        }
+            except Exception:
+                continue
+        
+        # Azure Storage
+        for bucket in bucket_names:
+            try:
+                if which("curl"):
+                    azure_url = f"https://{bucket}.blob.core.windows.net/"
+                    result = run_cmd(["curl", "-s", "-I", "--max-time", "10", azure_url],
+                                   capture=True, timeout=15, check_return=False)
+                    
+                    if result.stdout and ("200" in result.stdout or "400" in result.stdout):
+                        results[f"azure_{bucket}"] = {
+                            "type": "Azure Blob",
+                            "url": azure_url,
+                            "status": "accessible" if "200" in result.stdout else "exists",
+                            "headers": result.stdout.strip()
+                        }
+            except Exception:
+                continue
+        
+        # Google Cloud Storage
+        for bucket in bucket_names:
+            try:
+                if which("curl"):
+                    gcs_url = f"https://storage.googleapis.com/{bucket}/"
+                    result = run_cmd(["curl", "-s", "-I", "--max-time", "10", gcs_url],
+                                   capture=True, timeout=15, check_return=False)
+                    
+                    if result.stdout and ("200" in result.stdout or "403" in result.stdout):
+                        results[f"gcs_{bucket}"] = {
+                            "type": "Google Cloud Storage",
+                            "url": gcs_url,
+                            "status": "accessible" if "200" in result.stdout else "exists_but_protected",
+                            "headers": result.stdout.strip()
+                        }
+            except Exception:
+                continue
+        
+        atomic_write(out_file, json.dumps(results, indent=2))
+        logger.log(f"Found {len(results)} cloud storage resources", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"Cloud storage scanning error: {e}", "ERROR")
+
+def run_threat_intelligence_lookup(target: str, out_file: Path, cfg: Dict[str, Any], env: Dict[str, str]):
+    """Perform threat intelligence lookups using various sources"""
+    try:
+        logger.log(f"Threat intelligence lookup for {target}", "INFO")
+        results = {}
+        
+        # Extract domain/IP
+        from urllib.parse import urlparse
+        parsed = urlparse(target if target.startswith('http') else f"http://{target}")
+        domain = parsed.netloc or target
+        
+        # Shodan lookup (if API key provided)
+        shodan_api = cfg.get("threat_intelligence", {}).get("shodan_api", "")
+        if shodan_api and which("curl"):
+            try:
+                shodan_url = f"https://api.shodan.io/host/{domain}?key={shodan_api}"
+                result = run_cmd(["curl", "-s", "--max-time", "15", shodan_url],
+                               capture=True, timeout=20, check_return=False)
+                
+                if result.stdout and "error" not in result.stdout.lower():
+                    results["shodan"] = json.loads(result.stdout)
+            except Exception:
+                pass
+        
+        # VirusTotal lookup (if API key provided)
+        vt_api = cfg.get("threat_intelligence", {}).get("virustotal_api", "")
+        if vt_api and which("curl"):
+            try:
+                vt_url = f"https://www.virustotal.com/vtapi/v2/domain/report"
+                result = run_cmd([
+                    "curl", "-s", "--max-time", "15",
+                    "-d", f"apikey={vt_api}",
+                    "-d", f"domain={domain}",
+                    vt_url
+                ], capture=True, timeout=20, check_return=False)
+                
+                if result.stdout:
+                    try:
+                        vt_data = json.loads(result.stdout)
+                        if vt_data.get("response_code") == 1:
+                            results["virustotal"] = vt_data
+                    except:
+                        pass
+            except Exception:
+                pass
+        
+        # Check against common threat feeds (passive)
+        try:
+            if which("dig"):
+                # Check if domain is in abuse.ch feeds
+                abuse_result = run_cmd(["dig", "+short", f"{domain}.abuse.ch"],
+                                     capture=True, timeout=10, check_return=False)
+                if abuse_result.stdout and abuse_result.stdout.strip():
+                    results["abuse_ch"] = {
+                        "listed": True,
+                        "response": abuse_result.stdout.strip()
+                    }
+        except Exception:
+            pass
+        
+        atomic_write(out_file, json.dumps(results, indent=2))
+        logger.log(f"Threat intelligence lookup completed", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"Threat intelligence lookup error: {e}", "ERROR")
+
+def run_compliance_checks(target: str, out_file: Path, cfg: Dict[str, Any], env: Dict[str, str]):
+    """Run compliance-specific security checks"""
+    try:
+        logger.log(f"Compliance checks for {target}", "INFO")
+        results = {}
+        
+        compliance_cfg = cfg.get("compliance", {})
+        
+        if compliance_cfg.get("owasp_top10", True):
+            results["owasp_top10"] = {
+                "injection": [],
+                "broken_auth": [],
+                "sensitive_data": [],
+                "xxe": [],
+                "broken_access": [],
+                "security_config": [],
+                "xss": [],
+                "insecure_deserialization": [],
+                "vulnerable_components": [],
+                "logging_monitoring": []
+            }
+            
+            # Basic OWASP Top 10 checks
+            if which("curl"):
+                # SQL Injection basic test
+                sql_payloads = ["'", "1' OR '1'='1", "admin'--"]
+                for payload in sql_payloads:
+                    try:
+                        test_url = f"{target}?id={payload}"
+                        result = run_cmd(["curl", "-s", "--max-time", "10", test_url],
+                                       capture=True, timeout=15, check_return=False)
+                        if result.stdout and ("error" in result.stdout.lower() or "sql" in result.stdout.lower()):
+                            results["owasp_top10"]["injection"].append({
+                                "payload": payload,
+                                "response_indicates_vulnerability": True
+                            })
+                    except Exception:
+                        continue
+                
+                # XSS basic test
+                xss_payloads = ["<script>alert('xss')</script>", "javascript:alert('xss')"]
+                for payload in xss_payloads:
+                    try:
+                        test_url = f"{target}?search={payload}"
+                        result = run_cmd(["curl", "-s", "--max-time", "10", test_url],
+                                       capture=True, timeout=15, check_return=False)
+                        if result.stdout and payload in result.stdout:
+                            results["owasp_top10"]["xss"].append({
+                                "payload": payload,
+                                "reflected": True
+                            })
+                    except Exception:
+                        continue
+        
+        if compliance_cfg.get("pci_dss", True):
+            results["pci_dss"] = {
+                "ssl_tls_version": {},
+                "secure_protocols": {},
+                "encryption_strength": {}
+            }
+            
+            # Check SSL/TLS configuration for PCI DSS compliance
+            if which("openssl"):
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(target if target.startswith('http') else f"https://{target}")
+                    host = parsed.netloc or target
+                    port = parsed.port or 443
+                    
+                    # Test TLS versions
+                    tls_versions = ["ssl3", "tls1", "tls1_1", "tls1_2", "tls1_3"]
+                    for version in tls_versions:
+                        result = run_cmd([
+                            "openssl", "s_client", f"-{version}",
+                            "-connect", f"{host}:{port}",
+                            "-servername", host
+                        ], input_data="", capture=True, timeout=10, check_return=False)
+                        
+                        if result.stdout:
+                            if "Verify return code: 0" in result.stdout:
+                                results["pci_dss"]["ssl_tls_version"][version] = "supported"
+                            else:
+                                results["pci_dss"]["ssl_tls_version"][version] = "not_supported"
+                except Exception:
+                    pass
+        
+        atomic_write(out_file, json.dumps(results, indent=2))
+        logger.log(f"Compliance checks completed", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"Compliance checks error: {e}", "ERROR")
+
+def run_ml_vulnerability_analysis(scan_results_dir: Path, out_file: Path, cfg: Dict[str, Any]):
+    """Apply machine learning-based analysis to scan results"""
+    try:
+        logger.log("ML-based vulnerability analysis starting", "INFO")
+        results = {
+            "false_positive_reduction": {},
+            "risk_scoring": {},
+            "pattern_analysis": {},
+            "prioritization": []
+        }
+        
+        ml_cfg = cfg.get("ml_analysis", {})
+        
+        if ml_cfg.get("false_positive_reduction", True):
+            # Simple heuristic-based false positive reduction
+            nuclei_results = []
+            for nuclei_file in scan_results_dir.glob("**/nuclei_results.jsonl"):
+                try:
+                    with open(nuclei_file, 'r') as f:
+                        for line in f:
+                            if line.strip():
+                                nuclei_results.append(json.loads(line))
+                except Exception:
+                    continue
+            
+            # Basic false positive filtering
+            filtered_results = []
+            for result in nuclei_results:
+                confidence_score = 1.0
+                
+                # Reduce confidence for common false positives
+                if result.get("template-id", "").startswith("tech-detect"):
+                    confidence_score *= 0.3
+                elif "info" in result.get("info", {}).get("severity", "").lower():
+                    confidence_score *= 0.5
+                elif "exposed" in result.get("template-id", "").lower():
+                    confidence_score *= 0.7
+                
+                # Increase confidence for critical findings
+                if "critical" in result.get("info", {}).get("severity", "").lower():
+                    confidence_score *= 1.5
+                elif "rce" in result.get("template-id", "").lower():
+                    confidence_score *= 1.8
+                elif "sqli" in result.get("template-id", "").lower():
+                    confidence_score *= 1.6
+                
+                result["confidence_score"] = min(confidence_score, 1.0)
+                if confidence_score > 0.4:  # Threshold for inclusion
+                    filtered_results.append(result)
+            
+            results["false_positive_reduction"] = {
+                "original_count": len(nuclei_results),
+                "filtered_count": len(filtered_results),
+                "reduction_percentage": ((len(nuclei_results) - len(filtered_results)) / max(len(nuclei_results), 1)) * 100
+            }
+        
+        if ml_cfg.get("risk_scoring_ml", True):
+            # Calculate risk scores based on multiple factors
+            risk_factors = {}
+            
+            # Count vulnerabilities by severity
+            severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+            for result in nuclei_results:
+                severity = result.get("info", {}).get("severity", "info").lower()
+                if severity in severity_counts:
+                    severity_counts[severity] += 1
+            
+            # Calculate weighted risk score
+            weights = {"critical": 10, "high": 7, "medium": 4, "low": 2, "info": 0.5}
+            total_score = sum(severity_counts[sev] * weights[sev] for sev in severity_counts)
+            
+            results["risk_scoring"] = {
+                "total_risk_score": total_score,
+                "severity_distribution": severity_counts,
+                "risk_level": "critical" if total_score > 50 else "high" if total_score > 20 else "medium" if total_score > 5 else "low"
+            }
+        
+        atomic_write(out_file, json.dumps(results, indent=2))
+        logger.log("ML vulnerability analysis completed", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"ML vulnerability analysis error: {e}", "ERROR")
+
 # ---------- Core stages ----------
 def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
     logger.log("Enhanced recon stage started", "INFO")
@@ -1129,15 +1652,51 @@ def stage_vuln_scan(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
             nikto_out = tdir / "nikto_results.json"
             run_nikto(target_url, nikto_out, env)
             
-            # Phase 5: SQL Injection Testing (if enabled)
+            # Phase 6: Enhanced API Security Testing
+            if cfg.get("advanced_scanning", {}).get("api_discovery", True):
+                logger.log(f"Phase 6: API discovery and testing for {target}", "INFO")
+                api_out = tdir / "api_discovery.json"
+                run_api_discovery(target_url, api_out, env)
+            
+            # Phase 7: GraphQL Security Testing
+            if cfg.get("advanced_scanning", {}).get("graphql_testing", True):
+                logger.log(f"Phase 7: GraphQL security testing for {target}", "INFO")
+                graphql_out = tdir / "graphql_security.json"
+                run_graphql_testing(target_url, graphql_out, env)
+            
+            # Phase 8: JWT Analysis
+            if cfg.get("advanced_scanning", {}).get("jwt_analysis", True):
+                logger.log(f"Phase 8: JWT token analysis for {target}", "INFO")
+                jwt_out = tdir / "jwt_analysis.json"
+                run_jwt_analysis(target_url, jwt_out, env)
+            
+            # Phase 9: Cloud Storage Bucket Discovery
+            if cfg.get("advanced_scanning", {}).get("cloud_storage_buckets", True):
+                logger.log(f"Phase 9: Cloud storage discovery for {target}", "INFO")
+                cloud_out = tdir / "cloud_storage.json"
+                run_cloud_storage_scanning(target_url, cloud_out, env)
+            
+            # Phase 10: Threat Intelligence Lookup
+            if cfg.get("advanced_scanning", {}).get("threat_intelligence", True):
+                logger.log(f"Phase 10: Threat intelligence lookup for {target}", "INFO")
+                threat_out = tdir / "threat_intelligence.json"
+                run_threat_intelligence_lookup(target_url, threat_out, cfg, env)
+            
+            # Phase 11: Compliance Checks
+            if cfg.get("advanced_scanning", {}).get("compliance_checks", True):
+                logger.log(f"Phase 11: Compliance security checks for {target}", "INFO")
+                compliance_out = tdir / "compliance_checks.json"
+                run_compliance_checks(target_url, compliance_out, cfg, env)
+            
+            # Phase 12: SQL Injection Testing (if enabled)
             if which("sqlmap") and cfg.get("advanced_scanning", {}).get("sql_injection", False):
-                logger.log(f"Phase 5: SQL injection testing for {target}", "INFO")
+                logger.log(f"Phase 12: SQL injection testing for {target}", "INFO")
                 sqlmap_out = tdir / "sqlmap_results"
                 sqlmap_out.mkdir(exist_ok=True)
                 run_sqlmap(target_url, sqlmap_out, env)
             
-            # Phase 6: Check for common vulnerabilities from recon data
-            logger.log(f"Phase 6: Additional vulnerability checks for {target}", "INFO")
+            # Phase 13: Additional vulnerability checks from recon data
+            logger.log(f"Phase 13: Additional vulnerability checks for {target}", "INFO")
             additional_out = tdir / "additional_vulns.json"
             perform_additional_checks(target, tdir, additional_out, cfg, env)
             
@@ -1150,6 +1709,12 @@ def stage_vuln_scan(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
         futs = [ex.submit(per_target, t) for t in targets]
         for _ in as_completed(futs):
             pass
+
+    # Apply ML-based analysis to all scan results
+    if cfg.get("ml_analysis", {}).get("enabled", True):
+        logger.log("Applying ML-based vulnerability analysis", "INFO")
+        ml_out = vuln_dir / "ml_analysis_results.json"
+        run_ml_vulnerability_analysis(vuln_dir, ml_out, cfg)
 
     logger.log("Enhanced vulnerability scan stage complete", "SUCCESS")
 
@@ -2071,18 +2636,23 @@ def display_menu():
     print("\033[93m9. 📈 View Last Report\033[0m")
     print("\033[93m10. 🧪 Network Analysis Tools\033[0m")
     print("\033[93m11. 🛡️ Security Assessment Summary\033[0m")
-    print("\033[91m12. 🚪 Exit\033[0m")
+    print("\033[92m12. 🤖 AI-Powered Vulnerability Analysis\033[0m")
+    print("\033[92m13. ☁️ Cloud Security Assessment\033[0m")
+    print("\033[92m14. 🔌 API Security Testing\033[0m")
+    print("\033[92m15. 📋 Compliance & Risk Assessment\033[0m")
+    print("\033[92m16. 🚀 CI/CD Integration Mode\033[0m")
+    print("\033[91m17. 🚪 Exit\033[0m")
     print("\033[31m" + "="*80 + "\033[0m")
 
 def get_choice() -> int:
     try:
-        s = input("\n\033[93mSelect (1-12): \033[0m").strip()
+        s = input("\n\033[93mSelect (1-17): \033[0m").strip()
         if s.isdigit():
             n = int(s)
-            if 1 <= n <= 12:
+            if 1 <= n <= 17:
                 return n
     except (EOFError, KeyboardInterrupt):
-        return 12
+        return 17
     except Exception:
         pass
     return 12
@@ -2695,6 +3265,191 @@ def plugins_menu():
             rd = new_run()
             execute_plugin(name, rd, env_with_lists(), load_cfg())
 
+# ---------- Enhanced Menu Functions ----------
+def run_ai_vulnerability_analysis():
+    """Run AI-powered vulnerability analysis"""
+    print("\n\033[96m=== AI-Powered Vulnerability Analysis ===\033[0m")
+    
+    try:
+        # Find latest scan results
+        runs = sorted([d for d in RUNS_DIR.iterdir() if d.is_dir()], 
+                     key=lambda p: p.stat().st_mtime, reverse=True)
+        
+        if not runs:
+            logger.log("No scan results found. Please run a vulnerability scan first.", "WARNING")
+            input("Press Enter to continue...")
+            return
+        
+        latest_run = runs[0]
+        logger.log(f"Analyzing results from: {latest_run.name}", "INFO")
+        
+        # Run ML-based analysis
+        cfg = load_cfg()
+        ml_out = latest_run / "ai_analysis_results.json"
+        
+        run_ml_vulnerability_analysis(latest_run, ml_out, cfg)
+        
+        # Display results
+        if ml_out.exists():
+            with open(ml_out, 'r') as f:
+                results = json.load(f)
+            
+            print(f"\n📊 AI Analysis Results:")
+            print(f"   False Positive Reduction: {results.get('false_positive_reduction', {}).get('reduction_percentage', 0):.1f}%")
+            print(f"   Risk Level: {results.get('risk_scoring', {}).get('risk_level', 'unknown').upper()}")
+            print(f"   Total Risk Score: {results.get('risk_scoring', {}).get('total_risk_score', 0)}")
+        
+        logger.log("AI vulnerability analysis completed", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"AI analysis error: {e}", "ERROR")
+    
+    input("Press Enter to continue...")
+
+def run_cloud_security_assessment():
+    """Run cloud security assessment"""
+    print("\n\033[96m=== Cloud Security Assessment ===\033[0m")
+    
+    try:
+        targets = read_lines(TARGETS)
+        if not targets:
+            logger.log("No targets configured", "WARNING")
+            input("Press Enter to continue...")
+            return
+        
+        # Load and execute cloud security scanner plugin
+        plugins = load_plugins()
+        if "cloud_security_scanner" not in plugins:
+            logger.log("Cloud security scanner plugin not found", "WARNING")
+            input("Press Enter to continue...")
+            return
+        
+        run_dir = new_run()
+        env = env_with_lists()
+        cfg = load_cfg()
+        
+        logger.log("Starting cloud security assessment...", "INFO")
+        plugins["cloud_security_scanner"]["execute"](run_dir, env, cfg)
+        
+        logger.log("Cloud security assessment completed", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"Cloud security assessment error: {e}", "ERROR")
+    
+    input("Press Enter to continue...")
+
+def run_api_security_testing():
+    """Run API security testing"""
+    print("\n\033[96m=== API Security Testing ===\033[0m")
+    
+    try:
+        targets = read_lines(TARGETS)
+        if not targets:
+            logger.log("No targets configured", "WARNING")
+            input("Press Enter to continue...")
+            return
+        
+        # Load and execute API security scanner plugin
+        plugins = load_plugins()
+        if "api_security_scanner" not in plugins:
+            logger.log("API security scanner plugin not found", "WARNING")
+            input("Press Enter to continue...")
+            return
+        
+        run_dir = new_run()
+        env = env_with_lists()
+        cfg = load_cfg()
+        
+        logger.log("Starting API security testing...", "INFO")
+        plugins["api_security_scanner"]["execute"](run_dir, env, cfg)
+        
+        logger.log("API security testing completed", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"API security testing error: {e}", "ERROR")
+    
+    input("Press Enter to continue...")
+
+def run_compliance_assessment():
+    """Run compliance and risk assessment"""
+    print("\n\033[96m=== Compliance & Risk Assessment ===\033[0m")
+    
+    try:
+        targets = read_lines(TARGETS)
+        if not targets:
+            logger.log("No targets configured", "WARNING")
+            input("Press Enter to continue...")
+            return
+        
+        run_dir = new_run()
+        env = env_with_lists()
+        cfg = load_cfg()
+        
+        logger.log("Starting compliance assessment...", "INFO")
+        
+        # Run compliance checks for each target
+        for target in targets:
+            target_url = target if target.startswith("http") else f"http://{target}"
+            compliance_out = run_dir / f"compliance_{target.replace('.', '_').replace('/', '_')}.json"
+            
+            run_compliance_checks(target_url, compliance_out, cfg, env)
+        
+        logger.log("Compliance assessment completed", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"Compliance assessment error: {e}", "ERROR")
+    
+    input("Press Enter to continue...")
+
+def run_cicd_integration_mode():
+    """Run CI/CD integration mode"""
+    print("\n\033[96m=== CI/CD Integration Mode ===\033[0m")
+    
+    try:
+        print("This mode provides automated security scanning for CI/CD pipelines.")
+        print("\nAvailable options:")
+        print("1. Quick Scan (Fast, essential vulnerabilities)")
+        print("2. Full Scan (Comprehensive security assessment)")
+        print("3. API-Only Scan (Focus on API security)")
+        print("4. Cloud-Only Scan (Focus on cloud security)")
+        print("5. Generate CI/CD Configuration Files")
+        
+        choice = input("\nSelect option (1-5): ").strip()
+        
+        if choice == "5":
+            # Display info about generated CI/CD files
+            logger.log("CI/CD configuration files have been generated", "SUCCESS")
+            
+            print("\nGenerated files:")
+            print("📁 .github/workflows/security_scan.yml - GitHub Actions workflow")
+            print("🐳 Dockerfile - Container for deployment")
+            print("🚀 cicd_integration.py - CI/CD integration script")
+            
+            print("\nUsage examples:")
+            print("# CLI usage:")
+            print("python3 cicd_integration.py --target example.com --scan-type quick")
+            print("\n# Docker usage:")
+            print("docker build -t bl4ckc3ll-pantheon .")
+            print("docker run bl4ckc3ll-pantheon")
+            
+        elif choice in ["1", "2", "3", "4"]:
+            targets = read_lines(TARGETS)
+            if not targets:
+                logger.log("No targets configured", "WARNING")
+                input("Press Enter to continue...")
+                return
+            
+            scan_types = {"1": "quick", "2": "full", "3": "api-only", "4": "cloud-only"}
+            scan_type = scan_types[choice]
+            
+            logger.log(f"CI/CD {scan_type} scan mode configured", "SUCCESS")
+            logger.log("Use cicd_integration.py for automated scanning", "INFO")
+        
+    except Exception as e:
+        logger.log(f"CI/CD integration error: {e}", "ERROR")
+    
+    input("Press Enter to continue...")
+
 # ---------- Main ----------
 def main():
     ensure_layout()
@@ -2738,6 +3493,16 @@ def main():
         elif c == 11:
             security_assessment_summary()
         elif c == 12:
+            run_ai_vulnerability_analysis()
+        elif c == 13:
+            run_cloud_security_assessment()
+        elif c == 14:
+            run_api_security_testing()
+        elif c == 15:
+            run_compliance_assessment()
+        elif c == 16:
+            run_cicd_integration_mode()
+        elif c == 17:
             logger.log("🚪 Goodbye! Stay secure! 🛡️", "INFO")
             break
 

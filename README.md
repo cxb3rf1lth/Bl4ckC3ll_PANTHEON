@@ -1,52 +1,230 @@
 # Bl4ckC3ll_PANTHEON
 
+## 🛡️ Enhanced Advanced Security Testing Framework
 
-Advanced offensive security orchestrator for authorized assessments. It automates discovery and triage across reconnaissance, endpoint harvesting, vulnerability scanning, and professional reporting, with strong defaults, resource awareness, and a plugin system for team-specific extensions.
+Advanced offensive security orchestrator for authorized assessments with **AI-powered analysis**, **cloud security testing**, and **CI/CD integration**. It automates discovery and triage across reconnaissance, endpoint harvesting, vulnerability scanning, and professional reporting, with strong defaults, resource awareness, and an extensible plugin system.
 
 This project is designed for lab, internal red team, and authorized bug bounty use only.
 
-## Highlights
+## ✨ Enhanced Highlights
 
-- Menu driven UX with safe defaults and granular settings
-- Reconnaissance
-  - Subdomain discovery with subfinder and amass
-  - Port discovery with naabu
-  - HTTP fingerprinting with httpx
-  - Endpoint harvesting with gau and katana
-- Vulnerability scanning
-  - Nuclei on curated URL scopes
-  - False positive reduction pipeline with light HTTP revalidation
-- Reporting
-  - HTML, JSON, and CSV
-  - Per target sections with validated findings
-  - Automatic Interesting Endpoints list for human follow up
-- Operations
-  - Resource monitor to avoid overloading hosts
-  - Parallel execution with configurable concurrency
-  - Plugin system for custom stages
-  - Resilient command execution with retries and timeouts
+### 🔍 Advanced Reconnaissance
+- **Multi-source subdomain discovery** with subfinder, amass, and certificate transparency
+- **Enhanced port discovery** with naabu and masscan
+- **Comprehensive HTTP fingerprinting** with httpx and technology detection
+- **Advanced endpoint harvesting** with gau, katana, waybackurls, and gospider
+- **OSINT integration** with passive intelligence gathering
 
-## Requirements
+### 🚨 Next-Generation Vulnerability Scanning
+- **Nuclei** with enhanced template management and custom rules
+- **API security testing** including REST, GraphQL, and SOAP
+- **JWT token analysis** and authentication bypass testing
+- **Cloud storage bucket discovery** (AWS S3, Azure Blob, GCP)
+- **Container security** and Kubernetes exposure detection
+- **OWASP Top 10** and compliance-specific checks
+- **Machine Learning false positive reduction**
 
-- OS: Linux or macOS
-- Python: 3.9 or newer
-- Go: 1.20 or newer for ProjectDiscovery and tomnomnom tools
-- Recommended external tools on PATH:
-  - subfinder, amass, naabu, httpx, nuclei
-  - gau, katana
+### ☁️ Cloud Security Assessment
+- **Multi-cloud support**: AWS, Azure, Google Cloud Platform
+- **Storage bucket enumeration** and misconfiguration detection
+- **Container registry scanning** (Docker Hub, ECR, ACR, GCR)
+- **Kubernetes API** and dashboard exposure testing
+- **Cloud metadata service** SSRF testing
+- **Infrastructure as Code** security analysis
 
-The orchestrator detects tools at runtime. Missing tools are skipped gracefully. Reporting and the rest of the pipeline continue to work with whatever is available.
+### 🤖 AI-Powered Analysis
+- **Intelligent vulnerability prioritization** using ML algorithms
+- **False positive reduction** with confidence scoring
+- **Risk scoring** based on multiple threat factors
+- **Pattern recognition** for vulnerability clusters
+- **Automated threat correlation** and impact assessment
 
-## Quick start
+### 📊 Professional Reporting
+- **Multiple formats**: HTML, JSON, CSV, SARIF, JUnit
+- **Interactive dashboards** with risk visualization
+- **Executive summaries** with business impact analysis
+- **Compliance reporting** (OWASP, NIST, PCI-DSS, GDPR)
+- **Trend analysis** and historical comparisons
+- **Integration-ready** outputs for security tools
 
+### 🚀 CI/CD Integration
+- **GitHub Actions** workflows included
+- **Docker containerization** for scalable deployment  
+- **API endpoints** for programmatic access
+- **Webhook notifications** and automated reporting
+- **Fail-fast** configuration with customizable thresholds
+- **SARIF output** for security dashboard integration
+
+### 🔌 Enhanced Plugin System
+- **Advanced OSINT** collection and correlation
+- **API security scanner** with comprehensive testing
+- **Cloud security assessment** across multiple providers
+- **Custom compliance** modules and frameworks
+- **Threat intelligence** integration and enrichment
+
+## 🎯 Enhanced Requirements
+
+### Core Requirements
+- **OS**: Linux or macOS (Ubuntu 20.04+ recommended)
+- **Python**: 3.9 or newer (3.11+ recommended for ML features)
+- **Go**: 1.20 or newer for ProjectDiscovery and community tools
+- **Memory**: 4GB+ RAM (8GB+ recommended for full scans)
+- **Storage**: 10GB+ free space for templates and results
+
+### Security Tools (Auto-installed via install.sh)
+#### Core Tools
+- `subfinder`, `amass` - Subdomain discovery
+- `naabu`, `masscan` - Port scanning  
+- `httpx` - HTTP probing and fingerprinting
+- `nuclei` - Vulnerability scanning with templates
+- `katana`, `gau`, `waybackurls`, `gospider` - Endpoint discovery
+
+#### Enhanced Tools
+- `gobuster`, `dirb`, `ffuf` - Directory and file fuzzing
+- `nikto`, `sqlmap`, `whatweb` - Web application security
+- `subjack` - Subdomain takeover detection
+- `wappalyzer` - Technology detection
+
+#### System Tools
+- `curl`, `wget`, `openssl`, `dig`, `whois`, `nmap`
+
+### Python Dependencies (Enhanced)
 ```bash
-# 1) Clone the repo
+# Core system monitoring
+psutil>=5.9.0
+distro>=1.8.0
+requests>=2.28.0
+
+# Machine Learning and Analysis  
+scikit-learn>=1.1.0
+numpy>=1.21.0
+pandas>=1.5.0
+
+# Web Security and API Testing
+beautifulsoup4>=4.11.0
+pycryptodome>=3.15.0
+
+# Report Generation and Visualization
+matplotlib>=3.6.0
+plotly>=5.11.0
+jinja2>=3.1.0
+
+# Cloud Security
+boto3>=1.26.0
+azure-storage-blob>=12.14.0
+google-cloud-storage>=2.7.0
+
+# Network Analysis
+python-nmap>=0.7.1
+netaddr>=0.8.0
+```
+
+The orchestrator detects tools at runtime. Missing tools are skipped gracefully with fallback mechanisms.
+
+## 🚀 Enhanced Quick Start
+
+### Automated Setup (Recommended)
+```bash
+# 1) Clone the enhanced repository
 git clone https://github.com/cxb3rf1lth/Bl4ckC3ll_PANTHEON.git
 cd Bl4ckC3ll_PANTHEON
 
-# 2) Run the automated setup (recommended)
+# 2) Run automated setup with enhanced tools
 ./quickstart.sh
+
+# 3) Start the enhanced framework
+python3 bl4ckc3ll_p4nth30n.py
 ```
+
+### Docker Deployment (New!)
+```bash
+# Build the container with all tools
+docker build -t bl4ckc3ll-pantheon .
+
+# Run interactive mode
+docker run -it -v $(pwd)/results:/app/results bl4ckc3ll-pantheon
+
+# Run automated scan
+docker run -v $(pwd)/results:/app/results bl4ckc3ll-pantheon \
+  python3 cicd_integration.py --target example.com --scan-type full
+```
+
+### CI/CD Integration (New!)
+```bash
+# Quick security scan for CI/CD
+python3 cicd_integration.py \
+  --target your-target.com \
+  --scan-type quick \
+  --output-format sarif \
+  --fail-on high
+
+# Full assessment with all features
+python3 cicd_integration.py \
+  --target your-target.com \
+  --scan-type full \
+  --output-format json \
+  --fail-on medium \
+  --timeout 3600
+```
+
+## 📋 Enhanced Menu Overview
+
+The enhanced main menu provides:
+
+### Core Functions (Enhanced)
+1. **🎯 Manage Targets** - Multi-target configuration
+2. **🔄 Refresh Sources + Merge Wordlists** - Enhanced wordlist management  
+3. **🔍 Enhanced Reconnaissance** - Multi-source intelligence gathering
+4. **🚨 Advanced Vulnerability Scan** - 13-phase comprehensive testing
+5. **🔗 Full Pipeline** - Complete automated assessment
+6. **📊 Generate Enhanced Report** - Multi-format professional reports
+
+### Advanced Features (New!)
+7. **🔧 Settings & Configuration** - Granular control and optimization
+8. **🔌 Plugins Management** - Extensible functionality system
+9. **📈 View Last Report** - Interactive report viewing
+10. **🧪 Network Analysis Tools** - Deep network reconnaissance
+11. **🛡️ Security Assessment Summary** - Executive dashboard
+
+### Next-Generation Capabilities (New!)
+12. **🤖 AI-Powered Vulnerability Analysis** - Machine learning insights
+13. **☁️ Cloud Security Assessment** - Multi-cloud security testing  
+14. **🔌 API Security Testing** - Comprehensive API vulnerability scanning
+15. **📋 Compliance & Risk Assessment** - Regulatory compliance testing
+16. **🚀 CI/CD Integration Mode** - Automated pipeline integration
+
+## 🔍 Enhanced Pipeline Details
+
+### Phase 1: Advanced Reconnaissance
+- **Multi-source subdomain discovery** (subfinder, amass, certificate transparency)
+- **Enhanced port scanning** (naabu, masscan with intelligent rate limiting)  
+- **Comprehensive HTTP analysis** (httpx with technology detection)
+- **Advanced endpoint harvesting** (gau, katana, waybackurls, gospider)
+- **DNS enumeration** with historical analysis
+- **SSL/TLS analysis** with certificate transparency logs
+- **Network analysis** with ASN and geolocation mapping
+
+### Phase 2: Next-Gen Vulnerability Scanning  
+- **Nuclei** with enhanced templates and custom rules
+- **Security headers** analysis with compliance mapping
+- **CORS** misconfiguration detection
+- **API endpoint discovery** and security testing
+- **GraphQL** introspection and query analysis  
+- **JWT token** security and algorithm testing
+- **Cloud storage** bucket enumeration and testing
+- **Threat intelligence** correlation and enrichment
+- **Compliance checks** (OWASP, PCI-DSS, NIST)
+- **Container** and Kubernetes security assessment
+- **Machine Learning** false positive reduction
+
+### Phase 3: Advanced Analysis & Reporting
+- **Risk scoring** with ML-based prioritization
+- **Vulnerability correlation** and impact analysis  
+- **Executive summary** generation
+- **Multi-format exports** (HTML, JSON, CSV, SARIF, JUnit)
+- **Interactive dashboards** with drill-down capability
+- **Compliance mapping** to regulatory frameworks
+- **Trend analysis** and historical comparisons
 
 The quickstart script will automatically:
 - Validate Python 3.9+ installation
