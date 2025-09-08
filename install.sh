@@ -186,6 +186,16 @@ install_go_tools() {
         ["nuclei"]="github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
         ["katana"]="github.com/projectdiscovery/katana/cmd/katana@latest"
         ["gau"]="github.com/lc/gau/v2/cmd/gau@latest"
+        ["ffuf"]="github.com/ffuf/ffuf/v2@latest"
+        ["feroxbuster"]="github.com/epi052/feroxbuster@latest"
+        ["gobuster"]="github.com/OJ/gobuster/v3@latest"
+        ["subjack"]="github.com/haccer/subjack@latest"
+        ["subzy"]="github.com/LukaSikic/subzy@latest"
+        ["waybackurls"]="github.com/tomnomnom/waybackurls@latest"
+        ["gospider"]="github.com/jaeles-project/gospider@latest"
+        ["paramspider"]="github.com/devanshbatham/paramspider@latest"
+        ["dalfox"]="github.com/hahwul/dalfox/v2@latest"
+        ["amass"]="github.com/owasp-amass/amass/v4/cmd/amass@master"
     )
     
     for tool in "${!tools[@]}"; do
@@ -227,6 +237,104 @@ create_directories() {
 }
 
 # Validate installation
+# Install additional tools via system package manager and pip
+install_additional_tools() {
+    log_info "Installing additional security tools..."
+    
+    # System tools via apt (if available)
+    if command -v apt &> /dev/null; then
+        log_info "Installing system packages..."
+        
+        # Update package list
+        if sudo -n true 2>/dev/null; then
+            sudo apt update -qq 2>/dev/null || log_warning "Failed to update package list"
+            
+            # Install tools
+            declare -a apt_tools=(
+                "nmap"
+                "sqlmap" 
+                "nikto"
+                "dirb"
+                "masscan"
+                "whatweb"
+                "whois"
+                "dig"
+                "curl"
+                "wget"
+                "git"
+            )
+            
+            for tool in "${apt_tools[@]}"; do
+                if ! command -v "$tool" &> /dev/null; then
+                    log_info "Installing $tool..."
+                    sudo apt install -y "$tool" 2>/dev/null || log_warning "Failed to install $tool"
+                fi
+            done
+        else
+            log_warning "No sudo access, skipping system package installation"
+        fi
+    fi
+    
+    # Python tools via pip
+    log_info "Installing Python-based tools..."
+    
+    declare -a pip_tools=(
+        "xssstrike"
+        "dirsearch"
+        "arjun"
+    )
+    
+    for tool in "${pip_tools[@]}"; do
+        log_info "Installing $tool via pip..."
+        python3 -m pip install "$tool" --user 2>/dev/null || log_warning "Failed to install $tool"
+    done
+    
+    log_success "Additional tools installation completed"
+}
+
+# Create enhanced wordlists and payloads
+create_payloads() {
+    log_info "Creating enhanced payload collections..."
+    
+    mkdir -p "payloads/xss"
+    mkdir -p "payloads/sqli"
+    mkdir -p "payloads/nuclei"
+    
+    # XSS payloads
+    cat > "payloads/xss/basic_xss.txt" << 'EOF'
+<script>alert('XSS')</script>
+javascript:alert('XSS')
+<img src=x onerror=alert('XSS')>
+<svg onload=alert('XSS')>
+';alert('XSS');//
+"><script>alert('XSS')</script>
+<iframe src=javascript:alert('XSS')>
+<body onload=alert('XSS')>
+<input onfocus=alert('XSS') autofocus>
+'><svg/onload=alert('XSS')>
+"><img/src/onerror=alert('XSS')>
+EOF
+    
+    # SQLi payloads
+    cat > "payloads/sqli/basic_sqli.txt" << 'EOF'
+' OR '1'='1
+' OR 1=1--
+' OR '1'='1'/*
+admin'--
+admin'/*
+' OR 1=1#
+' OR 1=1/*
+') OR ('1'='1
+1' OR '1'='1
+1 OR 1=1
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+'; WAITFOR DELAY '00:00:10'--
+EOF
+    
+    log_success "Enhanced payloads created"
+}
+
 validate_installation() {
     log_info "Validating installation..."
     
@@ -253,11 +361,18 @@ validate_installation() {
         echo "example.com" > targets.txt
     fi
     
-    # Check installed tools
+    # Check installed tools - enhanced list
     tools_found=0
-    total_tools=6
+    total_tools=20
     
-    for tool in subfinder httpx naabu nuclei katana gau; do
+    declare -a check_tools=(
+        "subfinder" "httpx" "naabu" "nuclei" "katana" "gau"
+        "ffuf" "feroxbuster" "gobuster" "subjack" "subzy"
+        "nmap" "sqlmap" "nikto" "dirb" "amass"
+        "waybackurls" "gospider" "paramspider" "dalfox"
+    )
+    
+    for tool in "${check_tools[@]}"; do
         if command -v "$tool" &> /dev/null; then
             log_success "$tool is available"
             ((tools_found++))
@@ -270,6 +385,8 @@ validate_installation() {
     
     if [[ $tools_found -eq 0 ]]; then
         log_warning "No security tools found. The script will work but with limited functionality."
+    elif [[ $tools_found -ge 10 ]]; then
+        log_success "Good tool coverage detected!"
     fi
 }
 
@@ -363,7 +480,9 @@ main() {
     install_go
     setup_go_env
     install_go_tools
+    install_additional_tools
     create_directories
+    create_payloads
     create_test_script
     validate_installation
     

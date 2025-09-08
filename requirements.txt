@@ -30,3 +30,14 @@ netaddr>=0.8.0
 boto3>=1.26.0
 azure-storage-blob>=12.14.0
 google-cloud-storage>=2.7.0
+
+# Additional security tools
+XSStrike>=3.1.5
+dirsearch>=0.4.3
+arjun>=2.2.1
+
+# Enhanced parsing and processing
+jsonschema>=4.17.0
+pyyaml>=6.0
+colorama>=0.4.6
+tqdm>=4.64.0
