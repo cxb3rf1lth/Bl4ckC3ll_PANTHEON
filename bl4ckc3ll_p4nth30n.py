@@ -325,6 +325,150 @@ class Logger:
 
 logger = Logger()
 
+# ---------- Error Handling Helpers ----------
+def safe_execute(func, *args, default=None, error_msg="Operation failed", log_level="ERROR", **kwargs):
+    """Safely execute a function with standardized error handling"""
+    try:
+        return func(*args, **kwargs)
+    except FileNotFoundError as e:
+        logger.log(f"{error_msg} - File not found: {e}", log_level)
+        return default
+    except PermissionError as e:
+        logger.log(f"{error_msg} - Permission denied: {e}", log_level)
+        return default
+    except subprocess.TimeoutExpired as e:
+        logger.log(f"{error_msg} - Timeout: {e}", log_level)
+        return default
+    except Exception as e:
+        logger.log(f"{error_msg}: {e}", log_level)
+        return default
+
+def safe_file_operation(operation, path, *args, **kwargs):
+    """Safely perform file operations with proper error handling"""
+    try:
+        return operation(path, *args, **kwargs)
+    except FileNotFoundError:
+        logger.log(f"File not found: {path}", "ERROR")
+        return None
+    except PermissionError:
+        logger.log(f"Permission denied accessing: {path}", "ERROR")
+        return None
+    except IsADirectoryError:
+        logger.log(f"Expected file but found directory: {path}", "ERROR")
+        return None
+    except OSError as e:
+        logger.log(f"OS error accessing {path}: {e}", "ERROR")
+        return None
+    except Exception as e:
+        logger.log(f"Unexpected error with {path}: {e}", "ERROR")
+        return None
+
+def validate_input(value: str, pattern: str = None, max_length: int = 1000, allow_empty: bool = False) -> bool:
+    """Validate user input with security considerations"""
+    if not value and not allow_empty:
+        return False
+    
+    if len(value) > max_length:
+        logger.log(f"Input too long: {len(value)} > {max_length}", "WARNING")
+        return False
+    
+    # Basic security checks
+    dangerous_patterns = [
+        r'[;&|`$(){}[\]\\]',  # Command injection patterns
+        r'\.\./',             # Path traversal
+        r'<script',           # XSS patterns
+        r'javascript:',       # JavaScript injection
+    ]
+    
+    import re
+    for dangerous in dangerous_patterns:
+        if re.search(dangerous, value, re.IGNORECASE):
+            logger.log(f"Potentially dangerous input detected: {value[:50]}", "WARNING")
+            return False
+    
+    # Optional pattern validation
+    if pattern and not re.match(pattern, value):
+        return False
+    
+    return True
+
+# ---------- Utility Functions ----------
+def create_resource_monitor_thread(cfg: Dict[str, Any]) -> Tuple[threading.Event, threading.Thread]:
+    """Create and start a resource monitoring thread"""
+    stop_event = threading.Event()
+    monitor_thread = threading.Thread(
+        target=resource_monitor, 
+        args=(cfg, stop_event), 
+        daemon=True
+    )
+    monitor_thread.start()
+    return stop_event, monitor_thread
+
+def cleanup_resource_monitor(stop_event: threading.Event, monitor_thread: threading.Thread):
+    """Safely cleanup resource monitoring thread"""
+    try:
+        stop_event.set()
+        monitor_thread.join(timeout=5)  # Don't wait forever
+    except Exception as e:
+        logger.log(f"Error cleaning up resource monitor: {e}", "WARNING")
+
+def safe_http_request(url: str, timeout: int = 10, headers: Dict[str, str] = None) -> Optional[str]:
+    """Safely make HTTP requests with proper error handling and validation"""
+    if not validate_input(url, max_length=2000):
+        logger.log(f"Invalid URL for HTTP request: {url[:100]}", "WARNING") 
+        return None
+    
+    # Use curl for consistent behavior
+    cmd = ["curl", "-s", "-k", "-L", "-m", str(timeout)]
+    
+    if headers:
+        for key, value in headers.items():
+            if validate_input(key) and validate_input(value):
+                cmd.extend(["-H", f"{key}: {value}"])
+    
+    cmd.append(url)
+    
+    result = safe_execute(
+        run_cmd,
+        cmd,
+        capture=True, 
+        timeout=timeout + 5,
+        check_return=False,
+        default=None,
+        error_msg=f"HTTP request failed for {url}",
+        log_level="DEBUG"
+    )
+    
+    return result.stdout if result else None
+
+def execute_tool_safely(tool_name: str, args: List[str], timeout: int = 300, 
+                       output_file: Optional[Path] = None) -> bool:
+    """Safely execute security tools with standardized error handling"""
+    if not which(tool_name):
+        logger.log(f"Tool not available: {tool_name}", "WARNING")
+        return False
+    
+    # Validate arguments
+    for arg in args:
+        if isinstance(arg, str) and not validate_input(arg, max_length=500):
+            logger.log(f"Invalid argument for {tool_name}: {arg[:50]}", "WARNING")
+            return False
+    
+    cmd = [tool_name] + args
+    result = safe_execute(
+        run_cmd,
+        cmd,
+        capture=bool(output_file),
+        timeout=timeout,
+        default=None,
+        error_msg=f"Tool execution failed: {tool_name}"
+    )
+    
+    if result and output_file and hasattr(result, 'stdout'):
+        return atomic_write(output_file, result.stdout)
+    
+    return result is not None
+
 # ---------- Utils ----------
 def _bump_path():
     envpath = os.environ.get("PATH", "")
@@ -349,33 +493,53 @@ _bump_path()
 def ts() -> str:
     return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-def atomic_write(path: Path, data: str):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", delete=False, dir=path.parent, encoding="utf-8") as tmp:
-        tmp.write(data)
-        tmp.flush()
-        os.fsync(tmp.fileno())
-        tmp_path = Path(tmp.name)
-    os.replace(tmp_path, path)
+def atomic_write(path: Path, data: str) -> bool:
+    """Atomically write data to a file with proper error handling"""
+    def _write_operation():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile("w", delete=False, dir=path.parent, encoding="utf-8") as tmp:
+            tmp.write(data)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+            tmp_path = Path(tmp.name)
+        os.replace(tmp_path, path)
+        return True
+    
+    return safe_execute(
+        _write_operation,
+        default=False,
+        error_msg=f"Failed to write file {path}"
+    )
 
 def read_lines(path: Path) -> List[str]:
+    """Read lines from a file, ignoring comments and empty lines"""
     if not path.exists():
         return []
-    out: List[str] = []
-    for l in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        s = l.strip()
-        if s and not s.startswith("#"):
-            out.append(s)
-    return out
+    
+    def _read_operation():
+        out: List[str] = []
+        for l in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            s = l.strip()
+            if s and not s.startswith("#"):
+                out.append(s)
+        return out
+    
+    return safe_execute(
+        _read_operation,
+        default=[],
+        error_msg=f"Failed to read file {path}",
+        log_level="WARNING"
+    )
 
-def write_uniq(path: Path, items: List[str]):
+def write_uniq(path: Path, items: List[str]) -> bool:
+    """Write unique items to file, removing duplicates"""
     seen = set()
     out: List[str] = []
     for x in items:
         if x not in seen:
             seen.add(x)
             out.append(x)
-    atomic_write(path, "\n".join(out) + ("\n" if out else ""))
+    return atomic_write(path, "\n".join(out) + ("\n" if out else ""))
 
 def os_kind() -> str:
     s = platform.system().lower()
@@ -464,44 +628,41 @@ def which(tool: str) -> bool:
     return shutil.which(tool) is not None
 
 # ---------- Dependency validation ----------
-def validate_dependencies() -> bool:
-    """Validate all dependencies and provide helpful error messages"""
-    logger.log("Validating dependencies...", "INFO")
-    
-    # Check Python version
+def _check_python_version() -> bool:
+    """Check if Python version meets requirements"""
     python_version = sys.version_info
     if python_version.major < 3 or (python_version.major == 3 and python_version.minor < 9):
         logger.log(f"Python 3.9+ required, found {python_version.major}.{python_version.minor}", "ERROR")
         return False
-    
-    # Check optional Python packages
+    return True
+
+def _check_python_packages() -> List[str]:
+    """Check optional Python packages and return missing ones"""
     missing_packages = []
     
-    try:
-        import psutil
-        logger.log("psutil available for system monitoring", "DEBUG")
-    except ImportError:
-        missing_packages.append("psutil")
+    packages_to_check = {
+        "psutil": "System monitoring",
+        "distro": "OS detection", 
+        "requests": "HTTP operations"
+    }
     
-    try:
-        import distro
-        logger.log("distro available for OS detection", "DEBUG")
-    except ImportError:
-        missing_packages.append("distro")
-    
-    try:
-        import requests
-        logger.log("requests available for HTTP operations", "DEBUG")
-    except ImportError:
-        missing_packages.append("requests")
+    for package, description in packages_to_check.items():
+        try:
+            __import__(package)
+            logger.log(f"{package} available for {description.lower()}", "DEBUG")
+        except ImportError:
+            missing_packages.append(package)
     
     if missing_packages:
         logger.log(f"Optional packages missing: {', '.join(missing_packages)}", "WARNING")
         logger.log("Install with: pip3 install " + " ".join(missing_packages), "INFO")
         logger.log("Or run: pip3 install -r requirements.txt", "INFO")
     
-    # Check security tools (core + enhanced)
-    tools = {
+    return missing_packages
+
+def _get_security_tools_config() -> Dict[str, str]:
+    """Get configuration for security tools and their install commands"""
+    return {
         # Core recon tools
         "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
         "httpx": "github.com/projectdiscovery/httpx/cmd/httpx@latest", 
@@ -532,10 +693,14 @@ def validate_dependencies() -> bool:
         "arjun": "pip3 install arjun",
         "dalfox": "go install github.com/hahwul/dalfox/v2@latest"
     }
+
+def _check_security_tools() -> Tuple[List[str], List[Tuple[str, str]], int]:
+    """Check security tools availability"""
+    tools = _get_security_tools_config()
+    core_tools = ["subfinder", "httpx", "naabu", "nuclei", "katana", "gau", "ffuf", "nmap", "sqlmap"]
     
     available_tools = []
     missing_tools = []
-    core_tools = ["subfinder", "httpx", "naabu", "nuclei", "katana", "gau", "ffuf", "nmap", "sqlmap"]
     
     for tool, install_cmd in tools.items():
         if which(tool):
@@ -544,10 +709,9 @@ def validate_dependencies() -> bool:
         else:
             missing_tools.append((tool, install_cmd))
     
-    logger.log(f"Security tools available: {len(available_tools)}/{len(tools)}", "INFO")
-    
-    # Check if core tools are available
     core_available = sum(1 for tool in core_tools if which(tool))
+    
+    logger.log(f"Security tools available: {len(available_tools)}/{len(tools)}", "INFO")
     logger.log(f"Core tools available: {core_available}/{len(core_tools)}", "INFO")
     
     if missing_tools:
@@ -559,7 +723,10 @@ def validate_dependencies() -> bool:
                 logger.log(f"  \033[93m{tool}\033[0m (ENHANCED): {install_cmd}", "WARNING")
         logger.log("Run the install.sh script to automatically install missing tools", "INFO")
     
-    # Check essential system tools
+    return available_tools, missing_tools, core_available
+
+def _check_essential_tools() -> bool:
+    """Check essential system tools"""
     essential_tools = ["git", "wget", "unzip", "curl", "dig", "whois"]
     missing_essential = []
     
@@ -570,6 +737,26 @@ def validate_dependencies() -> bool:
     if missing_essential:
         logger.log(f"Essential system tools missing: {', '.join(missing_essential)}", "ERROR")
         logger.log("Please install missing system tools using your package manager", "ERROR")
+        return False
+    
+    return True
+
+def validate_dependencies() -> bool:
+    """Validate all dependencies and provide helpful error messages"""
+    logger.log("Validating dependencies...", "INFO")
+    
+    # Check Python version
+    if not _check_python_version():
+        return False
+    
+    # Check optional Python packages
+    _check_python_packages()
+    
+    # Check security tools
+    available_tools, missing_tools, core_available = _check_security_tools()
+    
+    # Check essential system tools
+    if not _check_essential_tools():
         return False
     
     # Check Go installation for tool installation
@@ -638,16 +825,32 @@ def get_system_resources() -> Dict[str, float]:
             return {"cpu": 0.0, "memory": 0.0, "disk": 0.0}
 
 def resource_monitor(cfg: Dict[str, Any], stop_event: threading.Event):
+    """Monitor system resources and throttle when necessary"""
+    monitor_interval = cfg.get("resource_management", {}).get("monitor_interval", 5)
+    cpu_threshold = cfg.get("resource_management", {}).get("cpu_threshold", 80)
+    memory_threshold = cfg.get("resource_management", {}).get("memory_threshold", 80)
+    disk_threshold = cfg.get("resource_management", {}).get("disk_threshold", 90)
+    
     while not stop_event.is_set():
-        r = get_system_resources()
-        logger.log(f"Resources CPU:{r['cpu']:.1f}% MEM:{r['memory']:.1f}% DISK:{r['disk']:.1f}%", "DEBUG")
-        if r["cpu"] > cfg["resource_management"]["cpu_threshold"] or \
-           r["memory"] > cfg["resource_management"]["memory_threshold"] or \
-           r["disk"] > cfg["resource_management"]["disk_threshold"]:
-            logger.log("High resource usage, slowing down...", "WARNING")
-            time.sleep(cfg["resource_management"]["monitor_interval"] * 2)
-        else:
-            time.sleep(cfg["resource_management"]["monitor_interval"])
+        try:
+            r = get_system_resources()
+            if r:  # Only log if we got valid resource data
+                logger.log(f"Resources CPU:{r['cpu']:.1f}% MEM:{r['memory']:.1f}% DISK:{r['disk']:.1f}%", "DEBUG")
+                
+                # Check thresholds and throttle if necessary
+                if (r["cpu"] > cpu_threshold or 
+                    r["memory"] > memory_threshold or 
+                    r["disk"] > disk_threshold):
+                    logger.log("High resource usage, throttling operations...", "WARNING")
+                    time.sleep(monitor_interval * 2)
+                else:
+                    time.sleep(monitor_interval)
+            else:
+                # Fallback if resource monitoring fails
+                time.sleep(monitor_interval)
+        except Exception as e:
+            logger.log(f"Resource monitoring error: {e}", "WARNING")
+            time.sleep(monitor_interval)
 
 # ---------- External sources ----------
 def git_clone_or_pull(url: str, dest: Path):
@@ -3110,9 +3313,7 @@ def run_full_pipeline():
     cfg = load_cfg()
     env = env_with_lists()
     rd = new_run()
-    stop_event = threading.Event()
-    th = threading.Thread(target=resource_monitor, args=(cfg, stop_event), daemon=True)
-    th.start()
+    stop_event, th = create_resource_monitor_thread(cfg)
     
     try:
         logger.log("[START] Starting full security assessment pipeline", "INFO")
@@ -3142,8 +3343,7 @@ def run_full_pipeline():
                     logger.log(f"[REPORT] View report at: {html_report}", "INFO")
         
     finally:
-        stop_event.set()
-        th.join()
+        cleanup_resource_monitor(stop_event, th)
 
 def settings_menu():
     """Enhanced settings and configuration menu"""
@@ -3645,29 +3845,23 @@ def run_recon():
     cfg = load_cfg()
     env = env_with_lists()
     rd = new_run()
-    stop_event = threading.Event()
-    th = threading.Thread(target=resource_monitor, args=(cfg, stop_event), daemon=True)
-    th.start()
+    stop_event, th = create_resource_monitor_thread(cfg)
     try:
         stage_recon(rd, env, cfg)
         logger.log(f"Recon complete. Run: {rd}", "SUCCESS")
     finally:
-        stop_event.set()
-        th.join()
+        cleanup_resource_monitor(stop_event, th)
 
 def run_vuln():
     cfg = load_cfg()
     env = env_with_lists()
     rd = new_run()
-    stop_event = threading.Event()
-    th = threading.Thread(target=resource_monitor, args=(cfg, stop_event), daemon=True)
-    th.start()
+    stop_event, th = create_resource_monitor_thread(cfg)
     try:
         stage_vuln_scan(rd, env, cfg)
         logger.log(f"Vuln scan complete. Run: {rd}", "SUCCESS")
     finally:
-        stop_event.set()
-        th.join()
+        cleanup_resource_monitor(stop_event, th)
 
 def run_report_for_latest():
     cfg = load_cfg()
