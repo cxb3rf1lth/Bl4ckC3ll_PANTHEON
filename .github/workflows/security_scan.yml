@@ -1,0 +1,173 @@
+name: Security Scanner
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly on Mondays at 2 AM
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target to scan'
+        required: true
+        default: 'example.com'
+      scan_type:
+        description: 'Scan type'
+        required: true
+        default: 'quick'
+        type: choice
+        options:
+        - quick
+        - full
+        - api-only
+        - cloud-only
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      security-events: write
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y curl wget git openssl dnsutils whois
+        
+    - name: Install Python dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Install security tools
+      run: |
+        # Install Go-based security tools
+        go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+        go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+        go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+        go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+        go install github.com/projectdiscovery/katana/cmd/katana@latest
+        go install github.com/lc/gau/v2/cmd/gau@latest
+        
+        # Add Go bin to PATH
+        echo "$HOME/go/bin" >> $GITHUB_PATH
+        
+    - name: Update Nuclei templates
+      run: |
+        nuclei -update-templates
+        
+    - name: Run security scan
+      env:
+        SHODAN_API: ${{ secrets.SHODAN_API_KEY }}
+        VIRUSTOTAL_API: ${{ secrets.VIRUSTOTAL_API_KEY }}
+      run: |
+        # Determine target and scan type
+        TARGET="${{ github.event.inputs.target || 'testphp.vulnweb.com' }}"
+        SCAN_TYPE="${{ github.event.inputs.scan_type || 'quick' }}"
+        
+        # Run the security scanner
+        python3 cicd_integration.py \
+          --target "$TARGET" \
+          --scan-type "$SCAN_TYPE" \
+          --output-format sarif \
+          --output-file security-results.sarif \
+          --fail-on high \
+          --timeout 3600
+          
+    - name: Upload SARIF results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: security-results.sarif
+        category: security-scanner
+        
+    - name: Generate security report
+      if: always()
+      run: |
+        # Generate additional formats for artifact upload
+        python3 cicd_integration.py \
+          --target "${{ github.event.inputs.target || 'testphp.vulnweb.com' }}" \
+          --scan-type "${{ github.event.inputs.scan_type || 'quick' }}" \
+          --output-format json \
+          --output-file security-results.json \
+          --fail-on high \
+          --timeout 3600
+          
+    - name: Upload security artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-scan-results
+        path: |
+          security-results.sarif
+          security-results.json
+          runs/
+          logs/
+        retention-days: 30
+        
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const results = JSON.parse(fs.readFileSync('security-results.json', 'utf8'));
+            const summary = results.summary;
+            
+            const comment = `## 🛡️ Security Scan Results
+            
+            **Target:** \`${results.scan_info.target}\`
+            **Scan Type:** \`${results.scan_info.scan_type}\`
+            **Duration:** ${Math.round(results.scan_info.duration)}s
+            
+            ### Summary
+            - **Total Vulnerabilities:** ${summary.total_vulns}
+            - **Critical:** ${summary.by_severity.critical}
+            - **High:** ${summary.by_severity.high}
+            - **Medium:** ${summary.by_severity.medium}
+            - **Low:** ${summary.by_severity.low}
+            
+            ${summary.by_severity.critical > 0 || summary.by_severity.high > 0 ? 
+              '⚠️ **Action Required:** Critical or High severity vulnerabilities found!' : 
+              '✅ **No critical issues found**'}
+            
+            <details>
+            <summary>View Details</summary>
+            
+            ${results.vulnerabilities.slice(0, 10).map(v => 
+              `- **${v.severity.toUpperCase()}**: ${v.name} (${v.id})`
+            ).join('\n')}
+            
+            ${results.vulnerabilities.length > 10 ? 
+              `\n... and ${results.vulnerabilities.length - 10} more` : ''}
+            
+            </details>`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          } catch (error) {
+            console.log('Could not create comment:', error);
+          }

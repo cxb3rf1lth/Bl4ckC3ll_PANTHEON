@@ -5,3 +5,28 @@ distro>=1.8.0
 
 # Optional but recommended for enhanced functionality
 requests>=2.28.0
+
+# Enhanced scanning and analysis capabilities
+beautifulsoup4>=4.11.0
+lxml>=4.9.0
+numpy>=1.21.0
+pandas>=1.5.0
+scikit-learn>=1.1.0
+
+# API testing and web security
+urllib3>=1.26.0
+pycryptodome>=3.15.0
+
+# Report generation and visualization
+matplotlib>=3.6.0
+plotly>=5.11.0
+jinja2>=3.1.0
+
+# Network analysis
+python-nmap>=0.7.1
+netaddr>=0.8.0
+
+# Cloud security
+boto3>=1.26.0
+azure-storage-blob>=12.14.0
+google-cloud-storage>=2.7.0
