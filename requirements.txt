@@ -44,3 +44,6 @@ jsonschema>=4.17.0
 pyyaml>=6.0
 colorama>=0.4.6
 tqdm>=4.64.0
+
+# Testing and quality assurance
+pytest>=8.0.0

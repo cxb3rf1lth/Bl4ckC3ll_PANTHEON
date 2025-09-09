@@ -48,6 +48,12 @@ package-lock.json
 .npm
 .eslintcache
 
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
 # Application specific
 runs/
 *.zip

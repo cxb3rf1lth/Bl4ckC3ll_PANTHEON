@@ -477,7 +477,8 @@ def execute_tool_safely(tool_name: str, args: List[str], timeout: int = 300,
     return result is not None
 
 # ---------- Utils ----------
-def _bump_path():
+def _bump_path() -> None:
+    """Update PATH environment variable to include common binary locations"""
     envpath = os.environ.get("PATH", "")
     home = Path.home()
     add = [
@@ -1859,7 +1860,8 @@ def run_threat_intelligence_lookup(target: str, out_file: Path, cfg: Dict[str, A
                         vt_data = json.loads(result.stdout)
                         if vt_data.get("response_code") == 1:
                             results["virustotal"] = vt_data
-                    except:
+                    except (json.JSONDecodeError, KeyError) as e:
+                        logger.error(f"Failed to parse VirusTotal JSON response: {e}")
                         pass
             except Exception:
                 pass
