@@ -36,10 +36,11 @@
   },
   "ignorePatterns": [
     "node_modules/**",
-    "dist/**",
+    "dist/**", 
     "build/**",
     "logs/**",
     "runs/**",
-    "*.min.js"
+    "*.min.js",
+    "package-lock.json"
   ]
 }
