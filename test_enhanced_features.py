@@ -5,6 +5,7 @@ Tests the new tool integrations and enhanced configurations
 """
 
 import sys
+import pytest
 import json
 import subprocess
 import shutil
@@ -30,15 +31,11 @@ def test_configuration_enhancements():
         ]
         
         for repo in expected_repos:
-            if repo not in config["repos"]:
-                print(f"✗ Missing repository: {repo}")
-                return False
+            assert repo in config["repos"], f"Missing repository: {repo}"
         
         # Check for enhanced nuclei configuration
         nuclei_cfg = config.get("nuclei", {})
-        if not nuclei_cfg.get("community_templates", False):
-            print("✗ Missing community templates configuration")
-            return False
+        assert nuclei_cfg.get("community_templates", False), "Missing community templates configuration"
         
         # Check for new tool configurations
         required_sections = [
@@ -46,16 +43,12 @@ def test_configuration_enhancements():
         ]
         
         for section in required_sections:
-            if section not in config:
-                print(f"✗ Missing configuration section: {section}")
-                return False
+            assert section in config, f"Missing configuration section: {section}"
         
-        print("✓ Configuration enhancements validated")
-        return True
+        print("✓ Test passed")
         
     except Exception as e:
-        print(f"✗ Configuration test failed: {e}")
-        return False
+        pytest.fail(f"Test failed: {e}")
 
 def test_tool_availability():
     """Test availability of new security tools"""
@@ -92,12 +85,8 @@ def test_tool_availability():
     print(f"Tool availability: {available_count}/{total_tools} tools found")
     
     # At least core tools should be available for full functionality
-    if available_count >= len(enhanced_tools):
-        print("✓ Sufficient tools available for enhanced functionality")
-        return True
-    else:
-        print("⚠ Limited tool availability - some features may not work")
-        return False
+    assert available_count >= len(enhanced_tools), "Limited tool availability - some features may not work"
+    print("✓ Tool availability validated")
 
 def test_enhanced_functions():
     """Test enhanced function definitions"""
@@ -114,18 +103,13 @@ def test_enhanced_functions():
         ]
         
         for func_name in enhanced_functions:
-            if not hasattr(main, func_name):
-                print(f"✗ Missing function: {func_name}")
-                return False
-            else:
-                print(f"✓ Function available: {func_name}")
+            assert hasattr(main, func_name), f"Missing function: {func_name}"
+            print(f"✓ Function available: {func_name}")
         
         print("✓ Enhanced functions validated")
-        return True
         
     except Exception as e:
-        print(f"✗ Function test failed: {e}")
-        return False
+        pytest.fail(f"Test failed: {e}")
 
 def test_plugin_functionality():
     """Test new plugin functionality"""
@@ -141,26 +125,19 @@ def test_plugin_functionality():
         
         for plugin in new_plugins:
             plugin_file = plugins_dir / plugin
-            if not plugin_file.exists():
-                print(f"✗ Missing plugin: {plugin}")
-                return False
+            assert plugin_file.exists(), "✗ Missing plugin: {plugin}"
             
             # Test plugin syntax
-            try:
-                subprocess.run([
-                    sys.executable, "-m", "py_compile", str(plugin_file)
-                ], check=True, capture_output=True)
-                print(f"✓ Plugin syntax valid: {plugin}")
-            except subprocess.CalledProcessError:
-                print(f"✗ Plugin syntax error: {plugin}")
-                return False
+            result = subprocess.run([
+                sys.executable, "-m", "py_compile", str(plugin_file)
+            ], capture_output=True)
+            assert result.returncode == 0, f"Plugin syntax error: {plugin}"
+            print(f"✓ Plugin syntax valid: {plugin}")
         
         print("✓ Plugin functionality validated")
-        return True
         
     except Exception as e:
-        print(f"✗ Plugin test failed: {e}")
-        return False
+        pytest.fail(f"Test failed: {e}")
 
 def test_wordlist_management():
     """Test enhanced wordlist and payload management"""
@@ -186,12 +163,10 @@ def test_wordlist_management():
             wordlist_files = list(wordlist_dir.glob("*.txt"))
             print(f"✓ Found {len(wordlist_files)} additional wordlist files")
         
-        print("✓ Wordlist management structure validated")
-        return True
+        print("✓ Test passed")
         
     except Exception as e:
-        print(f"✗ Wordlist test failed: {e}")
-        return False
+        pytest.fail(f"Test failed: {e}")
 
 def test_installation_script():
     """Test enhanced installation script"""
@@ -199,9 +174,7 @@ def test_installation_script():
     
     try:
         install_script = Path(__file__).parent / "install.sh"
-        if not install_script.exists():
-            print("✗ Installation script not found")
-            return False
+        assert install_script.exists(), "✗ Installation script not found"
         
         # Read and check for enhanced tool installation
         with open(install_script, 'r') as f:
@@ -226,12 +199,10 @@ def test_installation_script():
         else:
             print("⚠ Some enhanced installation functions missing")
         
-        print("✓ Installation script enhancements validated")
-        return True
+        print("✓ Test passed")
         
     except Exception as e:
-        print(f"✗ Installation script test failed: {e}")
-        return False
+        pytest.fail(f"Test failed: {e}")
 
 def main():
     """Run all enhancement tests"""
