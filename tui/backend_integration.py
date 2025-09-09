@@ -10,6 +10,7 @@ import json
 import threading
 import subprocess
 import time
+import logging
 from datetime import datetime
 
 # Add parent directory to path for imports
@@ -238,8 +239,7 @@ class TargetManager:
                 if content:
                     return [line.strip() for line in content.split('\n') if line.strip()]
         except Exception as e:
-            logging.warning(f"Operation failed: {e}")
-            # Consider if this error should be handled differently
+            logging.warning(f"Failed to load targets: {e}")
         return []
         
     @staticmethod
@@ -277,8 +277,7 @@ class ReportManager:
                             except Exception:
                                 continue
         except Exception as e:
-            logging.warning(f"Operation failed: {e}")
-            # Consider if this error should be handled differently
+            logging.warning(f"Failed to get available reports: {e}")
         return reports
         
     @staticmethod
@@ -292,8 +291,7 @@ class ReportManager:
                     if report_file.exists():
                         return json.loads(report_file.read_text())
         except Exception as e:
-            logging.warning(f"Operation failed: {e}")
-            # Consider if this error should be handled differently
+            logging.warning(f"Failed to load report: {e}")
         return None
 
 
