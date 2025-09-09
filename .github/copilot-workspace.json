@@ -1,0 +1,338 @@
+{
+  "version": "1.0",
+  "name": "Bl4ckC3ll_PANTHEON Advanced Security Framework",
+  "description": "Advanced cybersecurity testing framework with AI-powered analysis and automated workflows",
+  "contextualInformation": {
+    "projectType": "cybersecurity-framework",
+    "primaryLanguages": ["python", "javascript", "go", "yaml"],
+    "domains": [
+      "penetration-testing",
+      "vulnerability-assessment", 
+      "security-automation",
+      "reconnaissance",
+      "cloud-security",
+      "web-security",
+      "network-security"
+    ],
+    "architecture": "microservices",
+    "deployment": ["docker", "kubernetes", "cloud-native"],
+    "cicd": "github-actions"
+  },
+  "codeGeneration": {
+    "preferences": {
+      "codeStyle": "security-first",
+      "errorHandling": "comprehensive",
+      "logging": "detailed-security-logging",
+      "testing": "security-focused-testing",
+      "documentation": "extensive-with-examples",
+      "performance": "optimize-for-scale"
+    },
+    "securityGuidelines": {
+      "inputValidation": "always-sanitize",
+      "authentication": "multi-factor-preferred", 
+      "authorization": "least-privilege",
+      "encryption": "transport-and-rest",
+      "secretsManagement": "external-vault",
+      "auditLogging": "comprehensive"
+    },
+    "patterns": {
+      "preferred": [
+        "factory-pattern-for-scanners",
+        "observer-pattern-for-events",
+        "strategy-pattern-for-algorithms",
+        "decorator-pattern-for-security",
+        "async-await-for-io",
+        "dependency-injection"
+      ],
+      "discouraged": [
+        "hardcoded-credentials",
+        "sql-injection-vulnerable",
+        "xss-vulnerable-templates",
+        "unsafe-deserialization",
+        "weak-crypto-algorithms"
+      ]
+    }
+  },
+  "workflowIntegration": {
+    "cicd": {
+      "security": {
+        "staticAnalysis": ["bandit", "semgrep", "eslint-security"],
+        "dependencyScanning": ["safety", "npm-audit", "snyk"],
+        "secretsScanning": ["trufflehog", "detect-secrets"],
+        "containerScanning": ["trivy", "grype", "clair"],
+        "infrastructureScanning": ["checkov", "tfsec", "terrascan"]
+      },
+      "testing": {
+        "unit": "pytest with security fixtures",
+        "integration": "security-focused integration tests",
+        "performance": "load testing with security constraints",
+        "penetration": "automated security testing"
+      },
+      "deployment": {
+        "environments": ["development", "staging", "production"],
+        "strategy": "blue-green with security validation",
+        "rollback": "automated on security failures"
+      }
+    }
+  },
+  "suggestionContext": {
+    "security": {
+      "reconaissance": {
+        "tools": ["subfinder", "amass", "httpx", "naabu", "masscan"],
+        "techniques": ["subdomain-enumeration", "port-scanning", "service-discovery"],
+        "apis": ["shodan", "virustotal", "censys", "securitytrails"],
+        "passive": ["certificate-transparency", "dns-records", "whois"]
+      },
+      "vulnerabilityScanning": {
+        "tools": ["nuclei", "nmap", "openvas", "nikto", "sqlmap"],
+        "categories": ["owasp-top10", "cve-database", "zero-day", "misconfigurations"],
+        "techniques": ["authenticated-scans", "credential-testing", "fuzzing"],
+        "reporting": ["sarif", "json", "html", "pdf", "csv"]
+      },
+      "webSecurity": {
+        "tools": ["burp-suite", "zap", "ffuf", "gobuster", "dirb"],
+        "techniques": ["parameter-discovery", "endpoint-fuzzing", "authentication-bypass"],
+        "vulnerabilities": ["xss", "sql-injection", "csrf", "ssrf", "rce"]
+      },
+      "cloudSecurity": {
+        "platforms": ["aws", "azure", "gcp", "kubernetes"],
+        "tools": ["prowler", "scoutsuite", "kube-bench", "falco"],
+        "assessments": ["iam-policies", "network-security", "data-encryption", "compliance"]
+      }
+    },
+    "development": {
+      "frameworks": {
+        "python": ["flask", "fastapi", "django", "asyncio"],
+        "testing": ["pytest", "unittest", "mock", "fixtures"],
+        "security": ["cryptography", "pyjwt", "passlib", "oauthlib"]
+      },
+      "patterns": {
+        "async": "Use async/await for I/O operations",
+        "errorHandling": "Catch specific exceptions with security logging",
+        "configuration": "Environment-based configuration with secrets management",
+        "monitoring": "Structured logging with correlation IDs"
+      }
+    }
+  },
+  "codeTemplates": {
+    "securityScanner": {
+      "python": {
+        "class": "class {name}Scanner(BaseScanner):",
+        "method": "async def scan_{target}_async(self, target: str, config: ScanConfig) -> ScanResult:",
+        "validation": "self._validate_target_authorization(target)",
+        "error": "except SecurityException as e:\\n    self.logger.error(f'Security violation: {e}', extra={'target': target})",
+        "rate_limit": "@rate_limit(calls_per_second=config.rate_limit)"
+      }
+    },
+    "apiEndpoint": {
+      "python": {
+        "flask": "@app.route('/{endpoint}', methods=['{method}'])\\n@require_auth\\n@validate_input\\ndef {function_name}():",
+        "fastapi": "@app.{method}('/{endpoint}')\\nasync def {function_name}(request: {RequestModel}, current_user: User = Depends(get_current_user)):"
+      }
+    },
+    "configuration": {
+      "yaml": "# Security configuration\\nsecurity:\\n  rate_limiting:\\n    enabled: true\\n    requests_per_minute: {rate}\\n  authentication:\\n    required: true\\n    method: {auth_method}",
+      "docker": "# Security-hardened Dockerfile\\nFROM python:3.12-slim\\nRUN useradd --create-home --shell /bin/bash app\\nUSER app\\nWORKDIR /home/app"
+    }
+  },
+  "intelligentSuggestions": {
+    "securityBestPractices": {
+      "inputValidation": {
+        "triggers": ["user_input", "api_parameter", "file_upload"],
+        "suggestions": [
+          "Validate input format and length",
+          "Sanitize for injection attacks",
+          "Use allowlists over blocklists",
+          "Implement rate limiting"
+        ]
+      },
+      "authentication": {
+        "triggers": ["login", "auth", "token", "session"],
+        "suggestions": [
+          "Implement multi-factor authentication",
+          "Use strong password policies",
+          "Secure session management",
+          "Token rotation and expiration"
+        ]
+      },
+      "dataProtection": {
+        "triggers": ["database", "storage", "encrypt", "sensitive"],
+        "suggestions": [
+          "Encrypt sensitive data at rest",
+          "Use TLS for data in transit", 
+          "Implement proper key management",
+          "Follow data minimization principles"
+        ]
+      }
+    },
+    "performanceOptimization": {
+      "scanning": {
+        "triggers": ["scan", "enumerate", "discovery"],
+        "suggestions": [
+          "Use async/await for concurrent operations",
+          "Implement connection pooling",
+          "Add caching for repeated operations",
+          "Use batch processing for large datasets"
+        ]
+      },
+      "reporting": {
+        "triggers": ["report", "output", "results"],
+        "suggestions": [
+          "Stream large reports instead of loading in memory",
+          "Use efficient serialization formats",
+          "Implement pagination for large datasets",
+          "Add progress indicators for long operations"
+        ]
+      }
+    },
+    "errorHandling": {
+      "security": {
+        "triggers": ["exception", "error", "failure"],
+        "suggestions": [
+          "Don't expose sensitive information in error messages",
+          "Log security events with appropriate detail",
+          "Implement graceful degradation",
+          "Use circuit breakers for external services"
+        ]
+      }
+    }
+  },
+  "projectSpecific": {
+    "bl4ckc3llPantheon": {
+      "modules": {
+        "reconnaissance": {
+          "subdomain_discovery": ["subfinder", "amass", "certificate_transparency"],
+          "port_scanning": ["naabu", "masscan", "nmap"],
+          "service_enumeration": ["httpx", "nuclei", "nmap_scripts"],
+          "osint": ["shodan", "virustotal", "passive_dns"]
+        },
+        "vulnerability_assessment": {
+          "web_vulnerabilities": ["nuclei", "custom_templates", "manual_testing"],
+          "network_vulnerabilities": ["nmap", "openvas", "custom_scripts"],
+          "cloud_vulnerabilities": ["prowler", "scoutsuite", "custom_checks"],
+          "api_security": ["rest_testing", "graphql_testing", "authentication_bypass"]
+        },
+        "reporting": {
+          "formats": ["sarif", "json", "html", "pdf", "csv"],
+          "templates": ["executive", "technical", "compliance"],
+          "visualization": ["charts", "graphs", "timelines", "networks"]
+        }
+      },
+      "integrations": {
+        "apis": {
+          "shodan": "Shodan API for internet-wide scanning",
+          "virustotal": "VirusTotal API for threat intelligence",
+          "censys": "Censys API for internet scanning",
+          "securitytrails": "SecurityTrails API for DNS intelligence"
+        },
+        "tools": {
+          "nuclei": "Vulnerability scanning with custom templates",
+          "nmap": "Network discovery and security auditing", 
+          "subfinder": "Subdomain discovery tool",
+          "httpx": "HTTP toolkit for probing"
+        }
+      },
+      "workflows": {
+        "reconnaissance": "subdomain_discovery -> port_scanning -> service_enumeration -> vulnerability_scanning",
+        "assessment": "information_gathering -> vulnerability_identification -> exploitation -> reporting",
+        "monitoring": "continuous_scanning -> alert_generation -> incident_response"
+      }
+    }
+  },
+  "documentation": {
+    "standards": {
+      "functions": {
+        "required": ["description", "parameters", "returns", "raises", "example"],
+        "security": ["authorization_requirements", "input_validation", "security_considerations"]
+      },
+      "classes": {
+        "required": ["purpose", "usage", "attributes", "methods"],
+        "security": ["security_model", "threat_considerations", "safe_usage"]
+      },
+      "apis": {
+        "required": ["endpoint", "method", "parameters", "responses", "examples"],
+        "security": ["authentication", "authorization", "rate_limits", "security_headers"]
+      }
+    },
+    "examples": {
+      "include": true,
+      "types": ["basic_usage", "advanced_configuration", "security_scenarios", "integration_examples"],
+      "format": "markdown_with_code_blocks"
+    }
+  },
+  "qualityAssurance": {
+    "codeReview": {
+      "security": {
+        "checklist": [
+          "Input validation implemented",
+          "Authentication and authorization checked",
+          "Sensitive data properly handled",
+          "Error messages don't leak information",
+          "Logging includes security events"
+        ]
+      },
+      "performance": {
+        "checklist": [
+          "Async operations used appropriately",
+          "Resource cleanup implemented",
+          "Caching strategy considered",
+          "Memory usage optimized"
+        ]
+      }
+    },
+    "testing": {
+      "security": {
+        "types": ["unit_tests", "integration_tests", "security_tests", "penetration_tests"],
+        "coverage": "aim_for_90_percent",
+        "frameworks": ["pytest", "unittest", "security_fixtures"]
+      }
+    }
+  },
+  "deployment": {
+    "environments": {
+      "development": {
+        "security": "relaxed_for_testing",
+        "monitoring": "detailed_logging",
+        "performance": "debug_mode"
+      },
+      "staging": {
+        "security": "production_like",
+        "monitoring": "production_logging",
+        "performance": "optimized"
+      },
+      "production": {
+        "security": "maximum_hardening",
+        "monitoring": "comprehensive",
+        "performance": "fully_optimized"
+      }
+    },
+    "containers": {
+      "security": {
+        "base_images": "official_minimal_images",
+        "user": "non_root_user",
+        "scanning": "vulnerability_scanning_enabled"
+      }
+    }
+  },
+  "monitoring": {
+    "metrics": [
+      "scan_success_rate",
+      "vulnerability_detection_rate",
+      "false_positive_rate", 
+      "scan_duration",
+      "resource_utilization"
+    ],
+    "security": [
+      "failed_authentication_attempts",
+      "unauthorized_access_attempts",
+      "security_policy_violations",
+      "suspicious_activity_patterns"
+    ],
+    "alerts": [
+      "critical_vulnerabilities_found",
+      "scan_failures",
+      "security_incidents",
+      "performance_degradation"
+    ]
+  }
+}
