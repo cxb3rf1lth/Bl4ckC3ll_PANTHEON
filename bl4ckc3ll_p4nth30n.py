@@ -41,6 +41,80 @@ EXPLOITS_DIR = HERE / "exploits"
 PLUGINS_DIR = HERE / "plugins"
 BACKUP_DIR = HERE / "backups"
 
+# ---------- Dependency Backup Functions ----------
+
+def backup_dependencies() -> bool:
+    """Create backups of critical dependencies and configurations"""
+    try:
+        BACKUP_DIR.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = BACKUP_DIR / f"dependencies_backup_{timestamp}"
+        backup_path.mkdir(exist_ok=True)
+        
+        # Backup configuration
+        if CFG_FILE.exists():
+            shutil.copy2(CFG_FILE, backup_path / "p4nth30n.cfg.json")
+        
+        # Backup requirements
+        req_file = HERE / "requirements.txt"
+        if req_file.exists():
+            shutil.copy2(req_file, backup_path / "requirements.txt")
+        
+        # Backup install script
+        install_file = HERE / "install.sh"
+        if install_file.exists():
+            shutil.copy2(install_file, backup_path / "install.sh")
+        
+        # Create tool inventory
+        tool_inventory = {
+            "timestamp": timestamp,
+            "installed_tools": {},
+            "python_packages": {}
+        }
+        
+        # Check available tools
+        critical_tools = [
+            "nuclei", "subfinder", "httpx", "naabu", "sqlmap", 
+            "nmap", "ffuf", "gobuster", "dalfox", "subjack", "subzy"
+        ]
+        
+        for tool in critical_tools:
+            tool_path = which(tool)
+            tool_inventory["installed_tools"][tool] = {
+                "available": bool(tool_path),
+                "path": str(tool_path) if tool_path else None
+            }
+        
+        # Save inventory
+        atomic_write(backup_path / "tool_inventory.json", 
+                    json.dumps(tool_inventory, indent=2))
+        
+        logger.log(f"Dependencies backed up to: {backup_path}", "SUCCESS")
+        return True
+        
+    except Exception as e:
+        logger.log(f"Failed to backup dependencies: {e}", "WARNING")
+        return False
+
+def restore_dependencies(backup_path: Path) -> bool:
+    """Restore dependencies from backup"""
+    try:
+        if not backup_path.exists():
+            logger.log(f"Backup path not found: {backup_path}", "ERROR")
+            return False
+        
+        # Restore configuration if it exists
+        backup_cfg = backup_path / "p4nth30n.cfg.json"
+        if backup_cfg.exists() and not CFG_FILE.exists():
+            shutil.copy2(backup_cfg, CFG_FILE)
+            logger.log("Configuration restored from backup", "INFO")
+        
+        return True
+        
+    except Exception as e:
+        logger.log(f"Failed to restore dependencies: {e}", "WARNING")
+        return False
+
 # ---------- Configuration ----------
 DEFAULT_CFG: Dict[str, Any] = {
     "repos": {
@@ -4678,6 +4752,10 @@ def run_cicd_integration_mode():
 # ---------- Main ----------
 def main():
     ensure_layout()
+    
+    # Create initial backup of dependencies
+    backup_dependencies()
+    
     print(BANNER)
     print(f"\033[91m{APP} v{VERSION}-ENHANCED\033[0m by {AUTHOR}")
     print(f"\033[93m[SECURITY] Advanced Security Testing Framework with Enhanced Capabilities 🛡️\033[0m")
