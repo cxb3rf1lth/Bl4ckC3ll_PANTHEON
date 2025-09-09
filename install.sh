@@ -336,12 +336,21 @@ EOF
     log_success "Enhanced payloads created"
 }
 
+# Enhanced tool validation with auto-installation option
 validate_installation() {
     log_info "Validating installation..."
     
     # Check Python script
     if [[ -f "bl4ckc3ll_p4nth30n.py" ]]; then
         log_success "Main script found: bl4ckc3ll_p4nth30n.py"
+        # Test Python syntax
+        if python3 -m py_compile bl4ckc3ll_p4nth30n.py 2>/dev/null; then
+            log_success "Python script syntax is valid"
+        else
+            log_error "Python script has syntax errors"
+            python3 -m py_compile bl4ckc3ll_p4nth30n.py
+            exit 1
+        fi
     else
         log_error "Main script not found"
         exit 1
@@ -350,44 +359,263 @@ validate_installation() {
     # Check configuration
     if [[ -f "p4nth30n.cfg.json" ]]; then
         log_success "Configuration file found"
+        # Validate JSON syntax
+        if python3 -c "import json; json.load(open('p4nth30n.cfg.json'))" 2>/dev/null; then
+            log_success "Configuration file is valid JSON"
+        else
+            log_warning "Configuration file has invalid JSON, will be recreated"
+            rm -f "p4nth30n.cfg.json"
+        fi
     else
         log_warning "Configuration file not found, will be created on first run"
     fi
     
-    # Check targets file
+    # Check and create targets file
     if [[ -f "targets.txt" ]]; then
         log_success "Targets file found"
+        # Validate targets format
+        if [[ -s "targets.txt" ]]; then
+            while IFS= read -r line; do
+                if [[ -n "$line" && ! "$line" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ ]]; then
+                    log_warning "Invalid target format detected: $line"
+                fi
+            done < targets.txt
+        fi
     else
         log_warning "Creating default targets.txt with example.com"
         echo "example.com" > targets.txt
     fi
     
-    # Check installed tools - enhanced list
+    # Enhanced tool checking with installation suggestions
     tools_found=0
-    total_tools=20
+    missing_tools=()
     
-    declare -a check_tools=(
-        "subfinder" "httpx" "naabu" "nuclei" "katana" "gau"
-        "ffuf" "feroxbuster" "gobuster" "subjack" "subzy"
-        "nmap" "sqlmap" "nikto" "dirb" "amass"
-        "waybackurls" "gospider" "paramspider" "dalfox"
+    declare -A tool_info=(
+        ["subfinder"]="Passive subdomain enumeration"
+        ["httpx"]="Fast HTTP probe utility"
+        ["naabu"]="Fast port scanner"
+        ["nuclei"]="Vulnerability scanner"
+        ["katana"]="Web crawling framework"
+        ["gau"]="GetAllUrls - fetch URLs"
+        ["ffuf"]="Fast web fuzzer"
+        ["feroxbuster"]="Content discovery tool"
+        ["gobuster"]="URI/DNS brute-forcer"
+        ["subjack"]="Subdomain takeover tool"
+        ["subzy"]="Subdomain takeover checker"
+        ["nmap"]="Network discovery/security auditing"
+        ["sqlmap"]="SQL injection testing tool"
+        ["nikto"]="Web server scanner"
+        ["dirb"]="Web content scanner"
+        ["amass"]="Network mapping tool"
+        ["waybackurls"]="Fetch URLs from Wayback Machine"
+        ["gospider"]="Web spider"
+        ["paramspider"]="Parameter discovery"
+        ["dalfox"]="XSS scanning tool"
+        ["assetfinder"]="Find domains and subdomains"
+        ["findomain"]="Fast subdomain enumerator"
+        ["masscan"]="High-speed port scanner"
+        ["sslscan"]="SSL/TLS scanner"
+        ["testssl.sh"]="SSL/TLS tester"
+        ["sslyze"]="SSL configuration scanner"
+        ["dnsrecon"]="DNS enumeration script"
     )
     
-    for tool in "${check_tools[@]}"; do
+    total_tools=${#tool_info[@]}
+    
+    log_info "Checking ${total_tools} security tools..."
+    
+    for tool in "${!tool_info[@]}"; do
         if command -v "$tool" &> /dev/null; then
-            log_success "$tool is available"
+            log_success "$tool is available - ${tool_info[$tool]}"
             ((tools_found++))
         else
-            log_warning "$tool not found in PATH"
+            log_warning "$tool not found - ${tool_info[$tool]}"
+            missing_tools+=("$tool")
         fi
     done
     
     log_info "Found $tools_found/$total_tools security tools"
     
-    if [[ $tools_found -eq 0 ]]; then
-        log_warning "No security tools found. The script will work but with limited functionality."
-    elif [[ $tools_found -ge 10 ]]; then
-        log_success "Good tool coverage detected!"
+    # Provide installation recommendations
+    if [[ ${#missing_tools[@]} -gt 0 ]]; then
+        log_info "Missing tools can be installed using:"
+        echo ""
+        
+        # Group tools by installation method
+        declare -a go_tools=("subfinder" "httpx" "naabu" "nuclei" "katana" "assetfinder" "findomain")
+        declare -a apt_tools=("nmap" "sqlmap" "nikto" "dirb" "masscan" "sslscan" "dnsrecon")
+        declare -a pip_tools=("paramspider")
+        declare -a manual_tools=("amass" "waybackurls" "gospider" "dalfox" "feroxbuster" "gobuster" "ffuf" "testssl.sh" "sslyze")
+        
+        # Go tools
+        local missing_go=()
+        for tool in "${go_tools[@]}"; do
+            if [[ " ${missing_tools[*]} " =~ " ${tool} " ]]; then
+                missing_go+=("$tool")
+            fi
+        done
+        
+        if [[ ${#missing_go[@]} -gt 0 ]]; then
+            echo -e "${BLUE}Go tools:${NC}"
+            for tool in "${missing_go[@]}"; do
+                echo "  go install -v github.com/projectdiscovery/${tool}/v2/cmd/${tool}@latest"
+            done
+            echo ""
+        fi
+        
+        # APT tools
+        local missing_apt=()
+        for tool in "${apt_tools[@]}"; do
+            if [[ " ${missing_tools[*]} " =~ " ${tool} " ]]; then
+                missing_apt+=("$tool")
+            fi
+        done
+        
+        if [[ ${#missing_apt[@]} -gt 0 ]]; then
+            echo -e "${BLUE}APT packages:${NC}"
+            echo "  sudo apt update && sudo apt install -y ${missing_apt[*]}"
+            echo ""
+        fi
+        
+        # PIP tools
+        local missing_pip=()
+        for tool in "${pip_tools[@]}"; do
+            if [[ " ${missing_tools[*]} " =~ " ${tool} " ]]; then
+                missing_pip+=("$tool")
+            fi
+        done
+        
+        if [[ ${#missing_pip[@]} -gt 0 ]]; then
+            echo -e "${BLUE}Python packages:${NC}"
+            echo "  pip3 install ${missing_pip[*]}"
+            echo ""
+        fi
+        
+        # Manual installation needed
+        local missing_manual=()
+        for tool in "${manual_tools[@]}"; do
+            if [[ " ${missing_tools[*]} " =~ " ${tool} " ]]; then
+                missing_manual+=("$tool")
+            fi
+        done
+        
+        if [[ ${#missing_manual[@]} -gt 0 ]]; then
+            echo -e "${BLUE}Manual installation required:${NC}"
+            for tool in "${missing_manual[@]}"; do
+                case "$tool" in
+                    "amass")
+                        echo "  # Amass: https://github.com/OWASP/Amass/releases"
+                        ;;
+                    "waybackurls")
+                        echo "  go install github.com/tomnomnom/waybackurls@latest"
+                        ;;
+                    "gospider")
+                        echo "  go install github.com/jaeles-project/gospider@latest"
+                        ;;
+                    "dalfox")
+                        echo "  go install github.com/hahwul/dalfox/v2@latest"
+                        ;;
+                    "feroxbuster")
+                        echo "  # Feroxbuster: https://github.com/epi052/feroxbuster/releases"
+                        ;;
+                    "gobuster")
+                        echo "  go install github.com/OJ/gobuster/v3@latest"
+                        ;;
+                    "ffuf")
+                        echo "  go install github.com/ffuf/ffuf@latest"
+                        ;;
+                    "testssl.sh")
+                        echo "  git clone --depth 1 https://github.com/drwetter/testssl.sh.git"
+                        ;;
+                    "sslyze")
+                        echo "  pip3 install sslyze"
+                        ;;
+                esac
+            done
+            echo ""
+        fi
+        
+        if [[ $tools_found -eq 0 ]]; then
+            log_error "No security tools found. Install at least basic tools to continue."
+            exit 1
+        elif [[ $tools_found -lt 5 ]]; then
+            log_warning "Very few security tools found. The framework will have limited functionality."
+        elif [[ $tools_found -ge 15 ]]; then
+            log_success "Excellent tool coverage detected!"
+        elif [[ $tools_found -ge 10 ]]; then
+            log_success "Good tool coverage detected!"
+        else
+            log_info "Moderate tool coverage detected."
+        fi
+    else
+        log_success "All security tools are installed!"
+    fi
+    
+    # Check for wordlists and create them if missing
+    if [[ ! -d "wordlists_extra" ]] || [[ -z "$(ls -A wordlists_extra 2>/dev/null)" ]]; then
+        log_info "Creating essential wordlists..."
+        mkdir -p wordlists_extra
+        
+        # Create basic directory wordlist
+        cat > wordlists_extra/common_directories.txt << 'EOF'
+admin
+api
+app
+backup
+config
+data
+db
+debug
+dev
+docs
+downloads
+files
+images
+includes
+js
+login
+logs
+old
+phpinfo
+setup
+temp
+test
+tmp
+upload
+uploads
+www
+EOF
+        
+        # Create parameter wordlist
+        cat > wordlists_extra/common_parameters.txt << 'EOF'
+id
+user
+username
+name
+email
+password
+passwd
+token
+key
+api_key
+access_token
+file
+path
+url
+redirect
+callback
+return
+next
+debug
+admin
+test
+search
+query
+q
+s
+EOF
+        
+        log_success "Essential wordlists created"
     fi
 }
 

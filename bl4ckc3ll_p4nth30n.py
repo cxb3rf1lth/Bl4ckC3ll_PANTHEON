@@ -1572,31 +1572,92 @@ def load_cfg() -> Dict[str, Any]:
         return DEFAULT_CFG.copy()
 
 def _validate_configuration(cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """Validate configuration values and apply safe defaults"""
+    """Enhanced configuration validation with comprehensive checks and safe defaults"""
     # Create a copy to avoid modifying the original
     validated_cfg = cfg.copy()
     
-    # Validate limits section
+    # Validate limits section with expanded checks
     limits = validated_cfg.get("limits", {})
     limits["max_concurrent_scans"] = max(1, min(limits.get("max_concurrent_scans", 8), 20))
     limits["http_timeout"] = max(5, min(limits.get("http_timeout", 15), 300))
     limits["rps"] = max(1, min(limits.get("rps", 500), 2000))
+    limits["parallel_jobs"] = max(1, min(limits.get("parallel_jobs", 10), 50))
+    limits["max_retries"] = max(0, min(limits.get("max_retries", 3), 10))
+    limits["scan_depth"] = max(1, min(limits.get("scan_depth", 3), 10))
     validated_cfg["limits"] = limits
     
-    # Validate nuclei section
+    # Enhanced nuclei validation
     nuclei = validated_cfg.get("nuclei", {})
+    nuclei["enabled"] = nuclei.get("enabled", True)
     nuclei["rps"] = max(1, min(nuclei.get("rps", 800), 2000))
     nuclei["conc"] = max(1, min(nuclei.get("conc", 150), 500))
+    nuclei["severity"] = nuclei.get("severity", ["critical", "high", "medium"])
+    nuclei["timeout"] = max(5, min(nuclei.get("timeout", 30), 300))
+    nuclei["retries"] = max(0, min(nuclei.get("retries", 2), 5))
+    nuclei["all_templates"] = nuclei.get("all_templates", False)
     validated_cfg["nuclei"] = nuclei
     
-    # Ensure resource management section exists
-    if "resource_management" not in validated_cfg:
-        validated_cfg["resource_management"] = {
-            "monitor_interval": 5,
-            "cpu_threshold": 80,
-            "memory_threshold": 80,
-            "disk_threshold": 90
-        }
+    # Enhanced resource management
+    resource_mgmt = validated_cfg.get("resource_management", {})
+    resource_mgmt["monitor_interval"] = max(1, min(resource_mgmt.get("monitor_interval", 5), 60))
+    resource_mgmt["cpu_threshold"] = max(10, min(resource_mgmt.get("cpu_threshold", 80), 100))
+    resource_mgmt["memory_threshold"] = max(10, min(resource_mgmt.get("memory_threshold", 80), 100))
+    resource_mgmt["disk_threshold"] = max(10, min(resource_mgmt.get("disk_threshold", 90), 100))
+    resource_mgmt["auto_pause"] = resource_mgmt.get("auto_pause", True)
+    resource_mgmt["cleanup_temp"] = resource_mgmt.get("cleanup_temp", True)
+    validated_cfg["resource_management"] = resource_mgmt
+    
+    # Enhanced scanning configuration
+    scanning = validated_cfg.get("scanning", {})
+    scanning["aggressive_mode"] = scanning.get("aggressive_mode", False)
+    scanning["stealth_mode"] = scanning.get("stealth_mode", True)
+    scanning["user_agent_rotation"] = scanning.get("user_agent_rotation", True)
+    scanning["proxy_rotation"] = scanning.get("proxy_rotation", False)
+    scanning["custom_headers"] = scanning.get("custom_headers", {})
+    scanning["exclude_patterns"] = scanning.get("exclude_patterns", [])
+    validated_cfg["scanning"] = scanning
+    
+    # Fuzzing configuration  
+    fuzzing = validated_cfg.get("fuzzing", {})
+    fuzzing["enable_ffuf"] = fuzzing.get("enable_ffuf", True)
+    fuzzing["enable_feroxbuster"] = fuzzing.get("enable_feroxbuster", True)
+    fuzzing["enable_gobuster"] = fuzzing.get("enable_gobuster", True)
+    fuzzing["wordlist_size_limit"] = max(100, min(fuzzing.get("wordlist_size_limit", 50000), 1000000))
+    fuzzing["threads"] = max(1, min(fuzzing.get("threads", 20), 100))
+    fuzzing["delay"] = max(0, min(fuzzing.get("delay", 0), 5000))  # milliseconds
+    validated_cfg["fuzzing"] = fuzzing
+    
+    # Output and reporting
+    output = validated_cfg.get("output", {})
+    output["format"] = output.get("format", "json")
+    output["detailed"] = output.get("detailed", True)
+    output["compress"] = output.get("compress", False)
+    output["auto_backup"] = output.get("auto_backup", True)
+    output["retention_days"] = max(1, min(output.get("retention_days", 30), 365))
+    validated_cfg["output"] = output
+    
+    # Security and compliance
+    security = validated_cfg.get("security", {})
+    security["validate_ssl"] = security.get("validate_ssl", True)
+    security["follow_redirects"] = security.get("follow_redirects", True)
+    security["max_redirects"] = max(0, min(security.get("max_redirects", 5), 20))
+    security["block_private_ips"] = security.get("block_private_ips", True)
+    security["allowed_ports"] = security.get("allowed_ports", list(range(1, 65536)))
+    validated_cfg["security"] = security
+    
+    # Notification settings
+    notifications = validated_cfg.get("notifications", {})
+    notifications["enabled"] = notifications.get("enabled", False)
+    notifications["critical_only"] = notifications.get("critical_only", True)
+    notifications["methods"] = notifications.get("methods", [])
+    validated_cfg["notifications"] = notifications
+    
+    # Plugin system
+    plugins = validated_cfg.get("plugins", {})
+    plugins["enabled"] = plugins.get("enabled", True)
+    plugins["auto_update"] = plugins.get("auto_update", False)
+    plugins["trusted_sources"] = plugins.get("trusted_sources", [])
+    validated_cfg["plugins"] = plugins
     
     return validated_cfg
 
@@ -3086,8 +3147,8 @@ def run_threat_intelligence_lookup(target: str, out_file: Path, cfg: Dict[str, A
                 if result.stdout and "error" not in result.stdout.lower():
                     results["shodan"] = json.loads(result.stdout)
             except Exception as e:
-            logging.warning(f"Operation failed: {e}")
-            # Consider if this error should be handled differently
+                logging.warning(f"Operation failed: {e}")
+                # Consider if this error should be handled differently
         # VirusTotal lookup (if API key provided)
         vt_api = cfg.get("threat_intelligence", {}).get("virustotal_api", "")
         if vt_api and which("curl"):
@@ -3109,8 +3170,8 @@ def run_threat_intelligence_lookup(target: str, out_file: Path, cfg: Dict[str, A
                         logger.error(f"Failed to parse VirusTotal JSON response: {e}")
                         pass
             except Exception as e:
-            logging.warning(f"Operation failed: {e}")
-            # Consider if this error should be handled differently
+                logging.warning(f"Operation failed: {e}")
+                # Consider if this error should be handled differently
         # Check against common threat feeds (passive)
         try:
             if which("dig"):
@@ -3215,8 +3276,8 @@ def run_compliance_checks(target: str, out_file: Path, cfg: Dict[str, Any], env:
                             else:
                                 results["pci_dss"]["ssl_tls_version"][version] = "not_supported"
                 except Exception as e:
-            logging.warning(f"Operation failed: {e}")
-            # Consider if this error should be handled differently
+                    logging.warning(f"Operation failed: {e}")
+                    # Consider if this error should be handled differently
         atomic_write(out_file, json.dumps(results, indent=2))
         logger.log(f"Compliance checks completed", "SUCCESS")
         
@@ -3373,7 +3434,7 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                     try:
                         results["dns_info"] = json.loads(dns_out.read_text())
                     except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                        logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
             # Phase 3: Port Discovery (Enhanced)
             logger.log(f"Phase 3: Port discovery for {host}", "INFO")
@@ -3396,7 +3457,7 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                             h, port = l.rsplit(":", 1)
                             oports.append({"host": h, "port": int(port), "proto": "tcp", "source": "naabu"})
                         except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                            logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
             # Parse masscan output
             if masscan_out.exists():
@@ -3410,7 +3471,7 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                                     oports.append({"host": host, "port": port, "proto": "tcp", "source": "masscan"})
                                     break
                         except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                            logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
             # Deduplicate ports
             unique_ports = {}
@@ -3437,7 +3498,7 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                             data = json.loads(line)
                             http_info.append(data)
                         except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                            logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
                     results["http_info"] = http_info
 
@@ -3451,7 +3512,7 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                         tech_data = json.loads(whatweb_out.read_text())
                         results["technology_stack"] = tech_data
                     except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                        logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
             # Phase 6: SSL Analysis
             if cfg["advanced_scanning"]["ssl_analysis"]:
@@ -3462,7 +3523,7 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                     try:
                         results["ssl_info"] = json.loads(ssl_out.read_text())
                     except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                        logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
             # Phase 7: Network Analysis
             if cfg["network_analysis"]["whois_lookup"]:
@@ -3475,7 +3536,7 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                         try:
                             network_info[file.stem] = file.read_text()
                         except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                            logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
                     results["network_info"] = network_info
 
@@ -3515,7 +3576,7 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                                 for result in ffuf_data["results"]:
                                     results["directories"].append(f"{result.get('url', '')} (Status: {result.get('status', 'N/A')})")
                         except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                            logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
             # Phase 9: Endpoint Discovery
             if cfg["endpoints"]["use_waybackurls"] or cfg["endpoints"]["use_gospider"]:
@@ -3972,7 +4033,7 @@ def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                             h, port = l.rsplit(":", 1)
                             target_data["open_ports"].append({"host": h, "port": int(port), "proto": "tcp"})
                         except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                            logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
             # Parse HTTP information
             httpx = td / "httpx_output.jsonl"
@@ -3981,7 +4042,7 @@ def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                     try:
                         target_data["http_info"].append(json.loads(line))
                     except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                        logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
             # Load additional data files
             additional_files = {
@@ -3996,7 +4057,7 @@ def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                     try:
                         target_data[key] = json.loads(file_path.read_text())
                     except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                        logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
             # Load network analysis
             network_dir = td / "network_analysis"
@@ -4006,7 +4067,7 @@ def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                     try:
                         network_info[file.stem] = file.read_text()
                     except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                        logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
                 target_data["network_info"] = network_info
             
@@ -4046,7 +4107,7 @@ def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                             parsed_nuclei[severity].append(finding)
                         vuln_data["risk_score"] += {"critical": 10, "high": 7, "medium": 4, "low": 2, "info": 1}.get(severity, 0)
                     except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                        logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
                 vuln_data["nuclei_parsed"] = parsed_nuclei
             
@@ -4064,7 +4125,7 @@ def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                     try:
                         vuln_data[key] = json.loads(file_path.read_text())
                     except Exception as e:
-            logging.warning(f"Operation failed: {e}")
+                        logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
             vuln_results[tname] = vuln_data
 
