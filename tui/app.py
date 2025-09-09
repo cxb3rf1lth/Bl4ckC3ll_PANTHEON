@@ -15,6 +15,7 @@ import asyncio
 import time
 from datetime import datetime
 import threading
+import logging
 
 # Import screens locally to avoid circular import issues
 import sys
@@ -23,6 +24,9 @@ from pathlib import Path
 
 # Add parent directory to path for relative imports
 sys.path.append(str(Path(__file__).parent.parent))
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
 
 
 class PantheonTUI(App):
@@ -53,28 +57,69 @@ class PantheonTUI(App):
         """Create the main layout"""
         yield Header()
         
-        with TabbedContent(initial="dashboard"):
-            with TabPane("Dashboard", id="dashboard"):
-                from .screens.main_dashboard import MainDashboard
-                yield MainDashboard()
+        # Use a simple container structure instead of TabbedContent for now
+        with Container(id="main-container"):
+            # Tab buttons
+            with Horizontal(id="tab-buttons"):
+                yield Button("Dashboard", id="tab-dashboard", classes="tab-btn active")
+                yield Button("Targets", id="tab-targets", classes="tab-btn")
+                yield Button("Scanner", id="tab-scanner", classes="tab-btn")
+                yield Button("Reports", id="tab-reports", classes="tab-btn")
+                yield Button("Settings", id="tab-settings", classes="tab-btn")
+            
+            # Content areas - only one visible at a time
+            with Container(id="content-area"):
+                with Container(id="dashboard-content", classes="tab-content active"):
+                    from .screens.main_dashboard import MainDashboard
+                    yield MainDashboard()
                 
-            with TabPane("Targets", id="targets"):  
-                from .screens.targets import TargetsScreen
-                yield TargetsScreen()
+                with Container(id="targets-content", classes="tab-content hidden"):
+                    from .screens.targets import TargetsScreen
+                    yield TargetsScreen()
                 
-            with TabPane("Scanner", id="scanner"):
-                from .screens.scan_runner import ScanRunner
-                yield ScanRunner()
+                with Container(id="scanner-content", classes="tab-content hidden"):
+                    from .screens.scan_runner import ScanRunner
+                    yield ScanRunner()
                 
-            with TabPane("Reports", id="reports"):
-                from .screens.reports import ReportsScreen
-                yield ReportsScreen()
+                with Container(id="reports-content", classes="tab-content hidden"):
+                    from .screens.reports import ReportsScreen
+                    yield ReportsScreen()
                 
-            with TabPane("Settings", id="settings"):
-                from .screens.settings import SettingsScreen
-                yield SettingsScreen()
+                with Container(id="settings-content", classes="tab-content hidden"):
+                    from .screens.settings import SettingsScreen
+                    yield SettingsScreen()
                 
         yield Footer()
+    
+    @on(Button.Pressed, ".tab-btn")
+    def switch_tab(self, event: Button.Pressed):
+        """Handle tab button clicks"""
+        tab_id = event.button.id
+        
+        # Remove active class from all tab buttons and content
+        for btn in self.query(".tab-btn"):
+            btn.remove_class("active")
+        for content in self.query(".tab-content"):
+            content.remove_class("active")
+            content.add_class("hidden")
+        
+        # Activate clicked tab
+        event.button.add_class("active")
+        
+        # Show corresponding content
+        content_map = {
+            "tab-dashboard": "dashboard-content",
+            "tab-targets": "targets-content", 
+            "tab-scanner": "scanner-content",
+            "tab-reports": "reports-content",
+            "tab-settings": "settings-content"
+        }
+        
+        content_id = content_map.get(tab_id)
+        if content_id:
+            content = self.query_one(f"#{content_id}")
+            content.remove_class("hidden")
+            content.add_class("active")
         
     def on_mount(self):
         """Initialize the application"""
@@ -108,19 +153,19 @@ class PantheonTUI(App):
         
     def action_targets(self):
         """Switch to targets tab"""
-        self.query_one(TabbedContent).active = "targets"
+        self.query_one("#tab-targets").press()
         
     def action_scan(self):
-        """Switch to scanner tab"""  
-        self.query_one(TabbedContent).active = "scanner"
+        """Switch to scanner tab"""
+        self.query_one("#tab-scanner").press()
         
     def action_reports(self):
         """Switch to reports tab"""
-        self.query_one(TabbedContent).active = "reports"
+        self.query_one("#tab-reports").press()
         
     def action_settings(self):
         """Switch to settings tab"""
-        self.query_one(TabbedContent).active = "settings"
+        self.query_one("#tab-settings").press()
         
     def action_refresh(self):
         """Refresh current view"""

@@ -1,5 +1,47 @@
 /* Professional TUI Styles for Bl4ckC3ll_PANTHEON */
 
+/* Tab System */
+#main-container {
+    height: 100%;
+}
+
+#tab-buttons {
+    height: 3;
+    padding: 1;
+    dock: top;
+    background: blue;
+}
+
+.tab-btn {
+    margin: 0 1 0 0;
+    background: gray;
+    color: white;
+}
+
+.tab-btn.active {
+    background: yellow;
+    color: black;
+    text-style: bold;
+}
+
+#content-area {
+    height: 1fr;
+    padding: 1;
+}
+
+.tab-content {
+    height: 100%;
+    display: block;
+}
+
+.tab-content.hidden {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
 /* Layout and Grid */
 #dashboard-grid {
     grid-size: 3 3;
@@ -189,13 +231,4 @@ Select {
 /* Buttons */
 Button {
     margin: 0 1 0 0;
-}
-
-/* Tabbed Content */
-TabbedContent {
-    height: 100%;
-}
-
-TabPane {
-    padding: 1;
 }

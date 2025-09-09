@@ -9,6 +9,7 @@ from textual.widget import Widget
 from textual import on
 from pathlib import Path
 import re
+import logging
 
 
 class TargetInputPanel(Static):
@@ -39,10 +40,14 @@ class TargetInputPanel(Static):
         target = target_input.value.strip()
         
         if self.validate_target(target):
-            target_list = self.parent.query_one("#target-list", DataTable)
-            target_list.add_row(target, "Valid", "Active", "Not Scanned")
-            target_input.value = ""
-            self.query_one("#validation-status").update(f"Added target: {target}")
+            # Query from the screen root instead of parent
+            try:
+                target_list = self.screen.query_one("#target-list", DataTable)
+                target_list.add_row(target, "Valid", "Active", "Not Scanned")
+                target_input.value = ""
+                self.query_one("#validation-status").update(f"Added target: {target}")
+            except Exception as e:
+                self.query_one("#validation-status").update(f"Error adding target: {str(e)}")
         else:
             self.query_one("#validation-status").update(f"Invalid target: {target}")
             
@@ -54,19 +59,23 @@ class TargetInputPanel(Static):
         
         valid_count = 0
         invalid_count = 0
-        target_list = self.parent.query_one("#target-list", DataTable)
         
-        for target in targets:
-            if self.validate_target(target):
-                target_list.add_row(target, "Valid", "Active", "Not Scanned")
-                valid_count += 1
-            else:
-                invalid_count += 1
-                
-        bulk_input.text = ""
-        self.query_one("#validation-status").update(
-            f"Imported {valid_count} valid targets, {invalid_count} invalid"
-        )
+        try:
+            target_list = self.screen.query_one("#target-list", DataTable)
+            
+            for target in targets:
+                if self.validate_target(target):
+                    target_list.add_row(target, "Valid", "Active", "Not Scanned")
+                    valid_count += 1
+                else:
+                    invalid_count += 1
+                    
+            bulk_input.text = ""
+            self.query_one("#validation-status").update(
+                f"Imported {valid_count} valid targets, {invalid_count} invalid"
+            )
+        except Exception as e:
+            self.query_one("#validation-status").update(f"Error importing targets: {str(e)}")
         
     def validate_target(self, target):
         """Validate target format (domain or IP)"""
@@ -116,8 +125,8 @@ class TargetListPanel(Static):
                         if target:
                             table.add_row(target, "Valid", "Active", "Not Scanned")
         except Exception as e:
-            logging.warning(f"Operation failed: {e}")
-            # Consider if this error should be handled differently
+            logging.warning(f"Failed to load existing targets: {e}")
+            
     @on(Button.Pressed, "#btn-remove-target")
     def remove_selected_target(self):
         """Remove selected target from list"""
@@ -143,14 +152,17 @@ class TargetListPanel(Static):
         try:
             targets_file = Path(__file__).parent.parent.parent / "targets.txt"
             targets_file.write_text('\n'.join(targets))
-            # Show confirmation somehow
+            # Show confirmation somehow - could add a status message
+            logging.info(f"Exported {len(targets)} targets to {targets_file}")
         except Exception as e:
-            logging.warning(f"Operation failed: {e}")
-            # Consider if this error should be handled differently
+            logging.warning(f"Failed to export targets: {e}")
+            
     @on(Button.Pressed, "#btn-refresh-status")
     def refresh_target_status(self):
         """Refresh target validation status"""
         # Re-validate all targets and update status
+        table = self.query_one("#target-list", DataTable)
+        # Implementation could be added to re-validate targets
         pass
 
 
