@@ -32,10 +32,15 @@ def run_command(cmd, capture=True):
     """Run command and return result"""
     try:
         if capture:
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+            # SECURITY FIX: Use argument list instead of shell=True
+            import shlex
+            cmd_args = shlex.split(cmd) if isinstance(cmd, str) else cmd
+            result = subprocess.run(cmd_args, shell=False, capture_output=True, text=True, timeout=10)
             return result.returncode == 0, result.stdout.strip(), result.stderr.strip()
         else:
-            result = subprocess.run(cmd, shell=True, timeout=10)
+            import shlex
+            cmd_args = shlex.split(cmd) if isinstance(cmd, str) else cmd
+            result = subprocess.run(cmd_args, shell=False, timeout=10)
             return result.returncode == 0, "", ""
     except Exception as e:
         return False, "", str(e)

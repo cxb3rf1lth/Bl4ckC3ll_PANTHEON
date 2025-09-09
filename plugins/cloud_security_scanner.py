@@ -466,9 +466,9 @@ def scan_container_registries(base_name: str) -> Dict[str, Any]:
                             "repositories": len(data.get("results", [])),
                             "public": True
                         })
-                except:
-                    pass
-        
+                except Exception as e:
+            logging.warning(f"Unexpected error: {e}")
+            # Consider if this error should be handled differently
         except Exception:
             continue
     
@@ -567,7 +567,7 @@ def scan_kubernetes_exposure(target: str) -> Dict[str, Any]:
                 "version_info": result.stdout
             }
     
-    except Exception:
-        pass
-    
+    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
     return results

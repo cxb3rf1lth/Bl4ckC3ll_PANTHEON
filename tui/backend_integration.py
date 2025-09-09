@@ -237,8 +237,9 @@ class TargetManager:
                 content = targets_file.read_text().strip()
                 if content:
                     return [line.strip() for line in content.split('\n') if line.strip()]
-        except Exception:
-            pass
+        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
         return []
         
     @staticmethod
@@ -275,8 +276,9 @@ class ReportManager:
                                 })
                             except Exception:
                                 continue
-        except Exception:
-            pass
+        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
         return reports
         
     @staticmethod
@@ -289,8 +291,9 @@ class ReportManager:
                     report_file = run_dir / "report" / "report.json"
                     if report_file.exists():
                         return json.loads(report_file.read_text())
-        except Exception:
-            pass
+        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
         return None
 
 

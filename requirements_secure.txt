@@ -1,0 +1,86 @@
+# Secure Dependencies for Bl4ckC3ll_PANTHEON
+# Updated versions to fix known security vulnerabilities
+
+# Core dependencies - UPDATED for security
+psutil>=5.9.5
+distro>=1.9.0
+requests>=2.32.3
+
+# Advanced TUI interface - UPDATED
+textual>=0.80.0
+
+# Enhanced scanning and analysis - UPDATED  
+beautifulsoup4>=4.12.3
+lxml>=5.3.0
+numpy>=1.26.4
+pandas>=2.2.3
+scikit-learn>=1.5.2
+
+# API testing and web security - UPDATED for security
+urllib3>=2.5.0  # SECURITY: Fixed CVE-2024-37891, CVE-2025-50181, CVE-2025-50182
+pycryptodome>=3.21.0
+
+# Report generation - UPDATED for security  
+matplotlib>=3.9.2
+plotly>=5.24.1
+jinja2>=3.1.6  # SECURITY: Fixed CVE-2024-22195, CVE-2024-34064, CVE-2024-56201, CVE-2024-56326, CVE-2025-27516
+
+# Network analysis - UPDATED
+python-nmap>=0.7.1
+netaddr>=1.3.0
+
+# Cloud security - UPDATED
+boto3>=1.35.39
+azure-storage-blob>=12.23.1  
+google-cloud-storage>=2.18.2
+
+# JWT and Authentication - UPDATED for security
+PyJWT>=2.10.1  # SECURITY: Fixed CVE-2024-53861
+
+# Enhanced parsing and processing - UPDATED
+jsonschema>=4.23.0
+pyyaml>=6.0.2
+colorama>=0.4.6
+tqdm>=4.66.6
+
+# Web framework security - UPDATED
+twisted>=24.7.0  # SECURITY: Fixed CVE-2024-41810
+
+# Certificate management - UPDATED for security
+certifi>=2024.8.30  # SECURITY: Fixed CVE-2024-39689
+
+# Cryptography - UPDATED
+cryptography>=43.0.3
+
+# Additional security libraries
+keyring>=25.5.0  # For secure credential storage
+argon2-cffi>=23.1.0  # For secure password hashing
+
+# Testing and quality assurance - UPDATED
+pytest>=8.3.3
+
+# Security scanning tools (optional but recommended)
+bandit>=1.8.6
+safety>=3.6.1
+
+# Input validation and sanitization
+bleach>=6.2.0
+markupsafe>=3.0.2
+
+# Rate limiting and caching  
+cachetools>=5.5.0
+redis>=5.2.0  # For distributed caching
+
+# Async support
+aiohttp>=3.11.7
+asyncio-throttle>=1.0.2
+
+# Logging and monitoring
+structlog>=24.4.0
+sentry-sdk>=2.17.0  # For error tracking
+
+# Development dependencies (optional)
+black>=24.10.0  # Code formatting
+isort>=5.13.2   # Import sorting  
+mypy>=1.13.0    # Type checking
+pre-commit>=4.0.1  # Git hooks

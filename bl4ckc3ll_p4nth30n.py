@@ -30,6 +30,34 @@ try:
     BCAR_AVAILABLE = True
 except ImportError:
     BCAR_AVAILABLE = False
+# SECURITY: Input validation imports
+import re
+import ipaddress
+from urllib.parse import urlparse
+
+def validate_domain_input(domain: str) -> bool:
+    """Validate domain name for security."""
+    if not isinstance(domain, str) or len(domain) > 255:
+        return False
+    domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+    return bool(re.match(domain_pattern, domain))
+
+def validate_ip_input(ip: str) -> bool:
+    """Validate IP address for security."""
+    try:
+        ipaddress.ip_address(ip)
+        return True
+    except ValueError:
+        return False
+
+def validate_url_input(url: str) -> bool:
+    """Validate URL for security."""
+    try:
+        parsed = urlparse(url)
+        return parsed.scheme in ['http', 'https'] and bool(parsed.netloc)
+    except:
+        return False
+
 
 # ---------- App meta ----------
 APP = "Bl4CkC3ll_P4NTH30N"
@@ -403,9 +431,9 @@ class Logger:
         try:
             with open(self.log_file, "a", encoding="utf-8") as f:
                 f.write(log_message + "\n")
-        except Exception:
-            pass
-
+        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
 logger = Logger()
 
 # ---------- Error Handling Helpers ----------
@@ -1704,9 +1732,12 @@ class ToolFallbackManager:
         logger.log(f"Attempting to install '{tool_name}'...", "INFO")
         
         try:
+            # SECURITY FIX: Parse command safely instead of using shell=True
+            import shlex
+            install_args = shlex.split(install_cmd)
             result = subprocess.run(
-                install_cmd, 
-                shell=True, 
+                install_args,
+                shell=False,  # SECURITY: Never use shell=True
                 capture_output=True, 
                 text=True, 
                 timeout=300  # 5 minute timeout
@@ -3054,9 +3085,9 @@ def run_threat_intelligence_lookup(target: str, out_file: Path, cfg: Dict[str, A
                 
                 if result.stdout and "error" not in result.stdout.lower():
                     results["shodan"] = json.loads(result.stdout)
-            except Exception:
-                pass
-        
+            except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
         # VirusTotal lookup (if API key provided)
         vt_api = cfg.get("threat_intelligence", {}).get("virustotal_api", "")
         if vt_api and which("curl"):
@@ -3077,9 +3108,9 @@ def run_threat_intelligence_lookup(target: str, out_file: Path, cfg: Dict[str, A
                     except (json.JSONDecodeError, KeyError) as e:
                         logger.error(f"Failed to parse VirusTotal JSON response: {e}")
                         pass
-            except Exception:
-                pass
-        
+            except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
         # Check against common threat feeds (passive)
         try:
             if which("dig"):
@@ -3091,9 +3122,9 @@ def run_threat_intelligence_lookup(target: str, out_file: Path, cfg: Dict[str, A
                         "listed": True,
                         "response": abuse_result.stdout.strip()
                     }
-        except Exception:
-            pass
-        
+        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
         atomic_write(out_file, json.dumps(results, indent=2))
         logger.log(f"Threat intelligence lookup completed", "SUCCESS")
         
@@ -3183,9 +3214,9 @@ def run_compliance_checks(target: str, out_file: Path, cfg: Dict[str, Any], env:
                                 results["pci_dss"]["ssl_tls_version"][version] = "supported"
                             else:
                                 results["pci_dss"]["ssl_tls_version"][version] = "not_supported"
-                except Exception:
-                    pass
-        
+                except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
         atomic_write(out_file, json.dumps(results, indent=2))
         logger.log(f"Compliance checks completed", "SUCCESS")
         
@@ -3341,9 +3372,9 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                 if dns_out.exists():
                     try:
                         results["dns_info"] = json.loads(dns_out.read_text())
-                    except Exception:
-                        pass
-
+                    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
             # Phase 3: Port Discovery (Enhanced)
             logger.log(f"Phase 3: Port discovery for {host}", "INFO")
             ports_out = tdir / "open_ports.txt"
@@ -3364,9 +3395,9 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                         try:
                             h, port = l.rsplit(":", 1)
                             oports.append({"host": h, "port": int(port), "proto": "tcp", "source": "naabu"})
-                        except Exception:
-                            pass
-            
+                        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
             # Parse masscan output
             if masscan_out.exists():
                 for line in masscan_out.read_text(encoding="utf-8", errors="ignore").splitlines():
@@ -3378,9 +3409,9 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                                     port = int(part.split("/")[0])
                                     oports.append({"host": host, "port": port, "proto": "tcp", "source": "masscan"})
                                     break
-                        except Exception:
-                            pass
-            
+                        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
             # Deduplicate ports
             unique_ports = {}
             for port_info in oports:
@@ -3405,8 +3436,9 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                         try:
                             data = json.loads(line)
                             http_info.append(data)
-                        except Exception:
-                            pass
+                        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
                     results["http_info"] = http_info
 
             # Phase 5: Technology Detection
@@ -3418,9 +3450,9 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                     try:
                         tech_data = json.loads(whatweb_out.read_text())
                         results["technology_stack"] = tech_data
-                    except Exception:
-                        pass
-
+                    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
             # Phase 6: SSL Analysis
             if cfg["advanced_scanning"]["ssl_analysis"]:
                 logger.log(f"Phase 6: SSL analysis for {target}", "INFO")
@@ -3429,9 +3461,9 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                 if ssl_out.exists():
                     try:
                         results["ssl_info"] = json.loads(ssl_out.read_text())
-                    except Exception:
-                        pass
-
+                    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
             # Phase 7: Network Analysis
             if cfg["network_analysis"]["whois_lookup"]:
                 logger.log(f"Phase 7: Network analysis for {target}", "INFO")
@@ -3442,8 +3474,9 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                     for file in network_dir.glob("*.txt"):
                         try:
                             network_info[file.stem] = file.read_text()
-                        except Exception:
-                            pass
+                        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
                     results["network_info"] = network_info
 
             # Phase 8: Directory/File Fuzzing
@@ -3481,9 +3514,9 @@ def stage_recon(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                             if "results" in ffuf_data:
                                 for result in ffuf_data["results"]:
                                     results["directories"].append(f"{result.get('url', '')} (Status: {result.get('status', 'N/A')})")
-                        except Exception:
-                            pass
-
+                        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
             # Phase 9: Endpoint Discovery
             if cfg["endpoints"]["use_waybackurls"] or cfg["endpoints"]["use_gospider"]:
                 logger.log(f"Phase 9: Endpoint discovery for {target}", "INFO")
@@ -3938,18 +3971,18 @@ def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                         try:
                             h, port = l.rsplit(":", 1)
                             target_data["open_ports"].append({"host": h, "port": int(port), "proto": "tcp"})
-                        except Exception:
-                            pass
-            
+                        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
             # Parse HTTP information
             httpx = td / "httpx_output.jsonl"
             if httpx.exists():
                 for line in httpx.read_text(encoding="utf-8", errors="ignore").splitlines():
                     try:
                         target_data["http_info"].append(json.loads(line))
-                    except Exception:
-                        pass
-            
+                    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
             # Load additional data files
             additional_files = {
                 "dns_info.json": "dns_info",
@@ -3962,9 +3995,9 @@ def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                 if file_path.exists():
                     try:
                         target_data[key] = json.loads(file_path.read_text())
-                    except Exception:
-                        pass
-            
+                    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
             # Load network analysis
             network_dir = td / "network_analysis"
             if network_dir.exists():
@@ -3972,8 +4005,9 @@ def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                 for file in network_dir.glob("*.txt"):
                     try:
                         network_info[file.stem] = file.read_text()
-                    except Exception:
-                        pass
+                    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
                 target_data["network_info"] = network_info
             
             recon_results[tname] = target_data
@@ -4011,8 +4045,9 @@ def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                         if severity in parsed_nuclei:
                             parsed_nuclei[severity].append(finding)
                         vuln_data["risk_score"] += {"critical": 10, "high": 7, "medium": 4, "low": 2, "info": 1}.get(severity, 0)
-                    except Exception:
-                        pass
+                    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
                 vuln_data["nuclei_parsed"] = parsed_nuclei
             
             # Load additional vulnerability data
@@ -4028,9 +4063,9 @@ def stage_report(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                 if file_path.exists():
                     try:
                         vuln_data[key] = json.loads(file_path.read_text())
-                    except Exception:
-                        pass
-            
+                    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
             vuln_results[tname] = vuln_data
 
     # Calculate overall risk assessment
@@ -4659,8 +4694,9 @@ def get_choice() -> int:
                 return n
     except (EOFError, KeyboardInterrupt):
         return 24
-    except Exception:
-        pass
+    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
     return 0
 
 def run_full_pipeline():
