@@ -34,7 +34,11 @@ class ScanConfigPanel(Static):
                 ("Reconnaissance Only", "recon"),
                 ("Vulnerability Scan Only", "vuln"),
                 ("API Security Test", "api"),
-                ("Cloud Security Assessment", "cloud")
+                ("Cloud Security Assessment", "cloud"),
+                ("BCAR Enhanced Recon", "bcar"),
+                ("Subdomain Takeover", "takeover"),
+                ("Advanced Fuzzing", "fuzz"),
+                ("Payload Injection", "payload")
             ], id="scan-type")
             
             yield Label("Target Input:", classes="form-label")
