@@ -6,6 +6,7 @@ Tests the new ESLint integration, bug bounty commands, and automated testing cha
 
 import os
 import sys
+import pytest
 import json
 import subprocess
 import tempfile
@@ -17,87 +18,61 @@ def test_eslint_integration():
     
     # Check package.json exists
     package_json = Path("package.json")
-    if not package_json.exists():
-        print("✗ package.json not found")
-        return False
+    assert package_json.exists(), "package.json not found"
     
-    try:
-        with open(package_json, 'r') as f:
-            pkg_data = json.load(f)
-        
-        # Check required scripts
-        scripts = pkg_data.get('scripts', {})
-        required_scripts = ['lint', 'lint:check', 'lint:security']
-        
-        for script in required_scripts:
-            if script not in scripts:
-                print(f"✗ Missing npm script: {script}")
-                return False
-        
-        # Check ESLint configuration files
-        eslint_configs = ['.eslintrc.json', '.eslintrc-security.json']
-        for config in eslint_configs:
-            if not Path(config).exists():
-                print(f"✗ Missing ESLint config: {config}")
-                return False
-        
-        print("✓ ESLint integration configuration validated")
-        return True
-        
-    except Exception as e:
-        print(f"✗ ESLint integration test failed: {e}")
-        return False
+    with open(package_json, 'r') as f:
+        pkg_data = json.load(f)
+    
+    # Check required scripts
+    scripts = pkg_data.get('scripts', {})
+    required_scripts = ['lint', 'lint:check', 'lint:security']
+    
+    for script in required_scripts:
+        assert script in scripts, f"Missing npm script: {script}"
+    
+    # Check ESLint configuration files
+    eslint_configs = ['.eslintrc.json', '.eslintrc-security.json']
+    for config in eslint_configs:
+        assert Path(config).exists(), f"Missing ESLint config: {config}"
+    
+    print("✓ ESLint integration configuration validated")
 
 def test_bug_bounty_script():
     """Test bug bounty commands script"""
     print("Testing bug bounty commands script...")
     
     script_path = Path("bug_bounty_commands.sh")
-    if not script_path.exists():
-        print("✗ bug_bounty_commands.sh not found")
-        return False
+    assert script_path.exists(), "bug_bounty_commands.sh not found"
     
     # Check script is executable
-    if not os.access(script_path, os.X_OK):
-        print("✗ bug_bounty_commands.sh is not executable")
-        return False
+    assert os.access(script_path, os.X_OK), "bug_bounty_commands.sh is not executable"
     
     # Test script syntax
-    try:
-        result = subprocess.run(
-            ['bash', '-n', str(script_path)], 
-            capture_output=True, 
-            text=True,
-            timeout=10
-        )
-        
-        if result.returncode != 0:
-            print(f"✗ Script syntax error: {result.stderr}")
-            return False
-        
-        # Check for required functions
-        with open(script_path, 'r') as f:
-            content = f.read()
-        
-        required_functions = [
-            'subdomain_enum',
-            'port_scan', 
-            'http_probe',
-            'vuln_scan',
-            'generate_report'
-        ]
-        
-        for func in required_functions:
-            if func not in content:
-                print(f"✗ Missing function: {func}")
-                return False
-        
-        print("✓ Bug bounty script validated")
-        return True
-        
-    except Exception as e:
-        print(f"✗ Bug bounty script test failed: {e}")
-        return False
+    result = subprocess.run(
+        ['bash', '-n', str(script_path)], 
+        capture_output=True, 
+        text=True,
+        timeout=10
+    )
+    
+    assert result.returncode == 0, f"Script syntax error: {result.stderr}"
+    
+    # Check for required functions
+    with open(script_path, 'r') as f:
+        content = f.read()
+    
+    required_functions = [
+        'subdomain_enum',
+        'port_scan', 
+        'http_probe',
+        'vuln_scan',
+        'generate_report'
+    ]
+    
+    for func in required_functions:
+        assert func in content, f"Missing function: {func}"
+    
+    print("✓ Bug bounty script validated")
 
 def test_enhanced_application_features():
     """Test enhanced application features"""
@@ -120,25 +95,19 @@ def test_enhanced_application_features():
         ]
         
         for func_name in required_functions:
-            if not hasattr(main, func_name):
-                print(f"✗ Missing function: {func_name}")
-                return False
+            assert hasattr(main, func_name), "✗ Missing function: {func_name}"
         
-        print("✓ Enhanced application features validated")
-        return True
+        print("✓ Test passed")
         
     except Exception as e:
-        print(f"✗ Enhanced application features test failed: {e}")
-        return False
+        pytest.fail(f"Test failed: {e}")
 
 def test_github_workflow_integration():
     """Test GitHub Actions workflow integration"""
     print("Testing GitHub Actions workflow integration...")
     
     workflow_path = Path(".github/workflows/security_scan.yml")
-    if not workflow_path.exists():
-        print("✗ GitHub workflow file not found")
-        return False
+    assert workflow_path.exists(), "✗ GitHub workflow file not found"
     
     try:
         with open(workflow_path, 'r') as f:
@@ -156,16 +125,12 @@ def test_github_workflow_integration():
         ]
         
         for element in required_elements:
-            if element not in workflow_content:
-                print(f"✗ Missing workflow element: {element}")
-                return False
+            assert not (element not in workflow_content), "✗ Missing workflow element: {element}"
         
-        print("✓ GitHub workflow integration validated")
-        return True
+        print("✓ Test passed")
         
     except Exception as e:
-        print(f"✗ GitHub workflow test failed: {e}")
-        return False
+        pytest.fail(f"Test failed: {e}")
 
 def test_automation_chain_integration():
     """Test that all automation components integrate properly"""
@@ -194,16 +159,12 @@ def test_automation_chain_integration():
         ]
         
         for file_path in critical_files:
-            if not Path(file_path).exists():
-                print(f"✗ Critical file missing: {file_path}")
-                return False
+            assert Path(file_path).exists(), "✗ Critical file missing: {file_path}"
         
-        print("✓ Automation chain integration validated")
-        return True
+        print("✓ Test passed")
         
     except Exception as e:
-        print(f"✗ Automation chain integration test failed: {e}")
-        return False
+        pytest.fail(f"Test failed: {e}")
 
 def test_security_and_compliance():
     """Test security features and compliance"""
@@ -218,16 +179,12 @@ def test_security_and_compliance():
             
             # Verify security plugin is configured
             plugins = config.get('plugins', [])
-            if 'security' not in plugins:
-                print("✗ ESLint security plugin not configured")
-                return False
+            assert not ('security' not in plugins), "✗ ESLint security plugin not configured"
             
             # Check for security rules
             rules = config.get('rules', {})
             security_rules = [rule for rule in rules.keys() if rule.startswith('security/')]
-            if len(security_rules) < 5:
-                print("✗ Insufficient security rules configured")
-                return False
+            assert not (len(security_rules) < 5), "✗ Insufficient security rules configured"
         
         # Check bug bounty script security
         bug_bounty_script = Path("bug_bounty_commands.sh")
@@ -242,12 +199,10 @@ def test_security_and_compliance():
             if 'timeout' not in content:
                 print("⚠ Bug bounty script missing timeout controls")
         
-        print("✓ Security and compliance validated")
-        return True
+        print("✓ Test passed")
         
     except Exception as e:
-        print(f"✗ Security and compliance test failed: {e}")
-        return False
+        pytest.fail(f"Test failed: {e}")
 
 def main():
     """Run all automation integration tests"""
