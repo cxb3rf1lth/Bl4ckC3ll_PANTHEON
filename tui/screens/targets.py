@@ -115,9 +115,9 @@ class TargetListPanel(Static):
                         target = target.strip()
                         if target:
                             table.add_row(target, "Valid", "Active", "Not Scanned")
-        except Exception:
-            pass
-            
+        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
     @on(Button.Pressed, "#btn-remove-target")
     def remove_selected_target(self):
         """Remove selected target from list"""
@@ -144,9 +144,9 @@ class TargetListPanel(Static):
             targets_file = Path(__file__).parent.parent.parent / "targets.txt"
             targets_file.write_text('\n'.join(targets))
             # Show confirmation somehow
-        except Exception:
-            pass
-            
+        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
     @on(Button.Pressed, "#btn-refresh-status")
     def refresh_target_status(self):
         """Refresh target validation status"""

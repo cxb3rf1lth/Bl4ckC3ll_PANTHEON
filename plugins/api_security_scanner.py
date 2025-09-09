@@ -179,9 +179,9 @@ def discover_api_endpoints(target: str) -> Dict[str, Any]:
                             "type": "potential_api"
                         })
     
-    except Exception:
-        pass
-    
+    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
     return results
 
 def test_rest_api_security(target: str) -> Dict[str, Any]:
@@ -309,9 +309,9 @@ def test_graphql_security(target: str) -> Dict[str, Any]:
                                 schema_response = json.loads(schema_result.stdout)
                                 if "data" in schema_response:
                                     results["schema_dump"] = schema_response
-                            except:
-                                pass
-                
+                            except Exception as e:
+            logging.warning(f"Unexpected error: {e}")
+            # Consider if this error should be handled differently
                 except json.JSONDecodeError:
                     pass
         
@@ -418,9 +418,9 @@ def test_authentication_security(target: str) -> Dict[str, Any]:
                         "tests": ["none_algorithm", "weak_secret", "key_confusion"]
                     })
     
-    except Exception:
-        pass
-    
+    except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
     return results
 
 def test_rate_limiting(target: str) -> Dict[str, Any]:

@@ -104,7 +104,8 @@ class EnhancedValidator:
     def validate_with_cache(self, value: str, validator_func: Callable, cache_key: str = None) -> bool:
         """Validate with caching for performance"""
         if not cache_key:
-            cache_key = hashlib.md5(f"{validator_func.__name__}:{value}".encode()).hexdigest()
+            # SECURITY FIX: Use SHA-256 instead of MD5
+            cache_key = hashlib.sha256(f"{validator_func.__name__}:{value}".encode()).hexdigest()
             
         with self.cache_lock:
             if cache_key in self.validation_cache:

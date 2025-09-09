@@ -58,9 +58,9 @@ class ReportListPanel(Static):
                             except Exception:
                                 # Skip invalid reports
                                 continue
-        except Exception:
-            pass
-            
+        except Exception as e:
+            logging.warning(f"Operation failed: {e}")
+            # Consider if this error should be handled differently
     @on(Button.Pressed, "#btn-view-report")
     def view_selected_report(self):
         """View the selected report"""
