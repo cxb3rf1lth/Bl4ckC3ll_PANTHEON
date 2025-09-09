@@ -31,15 +31,16 @@
 
 .tab-content {
     height: 100%;
-    display: block;
 }
 
 .tab-content.hidden {
-    display: none;
+    visibility: hidden;
+    height: 0;
 }
 
 .tab-content.active {
-    display: block;
+    visibility: visible;
+    height: 100%;
 }
 
 /* Layout and Grid */
