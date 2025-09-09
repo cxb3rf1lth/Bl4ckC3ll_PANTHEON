@@ -279,9 +279,10 @@ install_additional_tools() {
     log_info "Installing Python-based tools..."
     
     declare -a pip_tools=(
-        "xssstrike"
+        "XSStrike"
         "dirsearch"
         "arjun"
+        "sqliv"
     )
     
     for tool in "${pip_tools[@]}"; do

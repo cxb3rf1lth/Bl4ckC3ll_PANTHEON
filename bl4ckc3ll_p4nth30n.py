@@ -169,17 +169,19 @@ DEFAULT_CFG: Dict[str, Any] = {
     },
     "sqlmap_testing": {
         "enabled": True,
-        "crawl_depth": 2,
-        "level": 3,
+        "crawl_depth": 1,                 # Reduced from 2
+        "level": 2,                       # Reduced from 3
         "risk": 2,
         "techniques": "BEUST",
-        "threads": 5,
+        "threads": 2,                     # Reduced from 5
         "batch_mode": True,
         "tamper_scripts": [],
         "custom_payloads": True,
         "time_based": True,
         "error_based": True,
-        "union_based": True
+        "union_based": True,
+        "timeout": 600,                   # Add timeout setting
+        "max_retries": 1                  # Add retry limit
     },
     "report": {
         "formats": ["html", "json", "csv", "sarif"],
@@ -200,10 +202,10 @@ DEFAULT_CFG: Dict[str, Any] = {
         "mirror_sites": True
     },
     "resource_management": {
-        "cpu_threshold": 85,
-        "memory_threshold": 90,
-        "disk_threshold": 95,
-        "monitor_interval": 5,
+        "cpu_threshold": 75,              # Reduced from 85
+        "memory_threshold": 80,           # Reduced from 90
+        "disk_threshold": 90,             # Reduced from 95
+        "monitor_interval": 3,            # Reduced for more frequent monitoring
         "auto_cleanup": True,
         "cache_enabled": True,
         "max_cache_size_mb": 1024
@@ -1332,12 +1334,14 @@ def run_sqlmap(target: str, out_file: Path, env: Dict[str, str], cfg: Dict[str, 
     
     cmd = [
         "sqlmap", "-u", target, "--batch", 
-        "--crawl", str(sqlmap_cfg.get("crawl_depth", 2)),
-        "--level", str(sqlmap_cfg.get("level", 3)),
+        "--crawl", str(sqlmap_cfg.get("crawl_depth", 1)),  # Reduced crawl depth
+        "--level", str(sqlmap_cfg.get("level", 2)),        # Reduced level 
         "--risk", str(sqlmap_cfg.get("risk", 2)), 
         "--output-dir", str(out_file.parent),
         "--technique", sqlmap_cfg.get("techniques", "BEUST"),
-        "--threads", str(sqlmap_cfg.get("threads", 5))
+        "--threads", str(sqlmap_cfg.get("threads", 2)),    # Reduced threads
+        "--timeout", "30",                                 # Add timeout
+        "--retries", "1"                                   # Reduce retries
     ]
     
     # Add tamper scripts if configured
@@ -1345,17 +1349,75 @@ def run_sqlmap(target: str, out_file: Path, env: Dict[str, str], cfg: Dict[str, 
     if tamper_scripts:
         cmd.extend(["--tamper", ",".join(tamper_scripts)])
     
-    run_cmd(cmd, env=env, timeout=1800, check_return=False)
+    # Reduced overall timeout to prevent hanging
+    run_cmd(cmd, env=env, timeout=600, check_return=False)
+
+def run_additional_sql_tests(target: str, out_file: Path, env: Dict[str, str], cfg: Dict[str, Any]):
+    """Run additional SQL injection tests using custom payloads"""
+    logger.log(f"Running additional SQL tests for {target}", "DEBUG")
+    
+    sql_results = {
+        "target": target,
+        "basic_tests": [],
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    # Basic SQL error detection payloads
+    test_payloads = [
+        "'", "''", "1'", "1' OR '1'='1", "admin'--", 
+        "' OR 1=1--", "' UNION SELECT NULL--", "1; WAITFOR DELAY '00:00:05'--"
+    ]
+    
+    try:
+        for payload in test_payloads[:5]:  # Limit to avoid excessive testing
+            test_url = f"{target}?id={payload}"
+            
+            try:
+                # Simple test with curl
+                result = run_cmd([
+                    "curl", "-s", "-m", "8", "-L", "--max-redirs", "3", test_url
+                ], capture=True, timeout=10, check_return=False)
+                
+                if result.stdout:
+                    # Look for SQL error patterns
+                    error_patterns = [
+                        "mysql_fetch", "ora-01", "microsoft ole db", "syntax error",
+                        "sqlstate", "postgresql", "warning: mysql"
+                    ]
+                    
+                    response_text = result.stdout.lower()
+                    for pattern in error_patterns:
+                        if pattern in response_text:
+                            sql_results["basic_tests"].append({
+                                "payload": payload,
+                                "error_pattern": pattern,
+                                "potential_sqli": True
+                            })
+                            break
+            except Exception as e:
+                logger.log(f"Error testing SQL payload {payload}: {e}", "DEBUG")
+        
+        atomic_write(out_file, json.dumps(sql_results, indent=2))
+        
+    except Exception as e:
+        logger.log(f"Error in additional SQL tests: {e}", "WARNING")
 
 def run_xss_strike(target: str, out_file: Path, env: Dict[str, str], cfg: Dict[str, Any]):
     """Run XSStrike for XSS vulnerability testing"""
-    if not which("xsstrike"):
-        logger.log("XSStrike not found, skipping", "WARNING")
+    # Check multiple possible command names for XSStrike
+    xss_strike_cmd = None
+    for cmd_name in ["xsstrike", "xssstrike", "XSStrike.py"]:
+        if which(cmd_name):
+            xss_strike_cmd = cmd_name
+            break
+    
+    if not xss_strike_cmd:
+        logger.log("XSStrike not found (tried: xsstrike, xssstrike, XSStrike.py), skipping", "WARNING")
         return
     
     xss_cfg = cfg.get("xss_testing", {})
     
-    cmd = ["xsstrike", "-u", target]
+    cmd = [xss_strike_cmd, "-u", target]
     
     if xss_cfg.get("reflected_xss", True):
         cmd.append("--fuzzer")
@@ -1368,6 +1430,31 @@ def run_xss_strike(target: str, out_file: Path, env: Dict[str, str], cfg: Dict[s
     cmd.extend(["-o", str(result_file)])
     
     run_cmd(cmd, env=env, timeout=1200, check_return=False)
+
+def run_dalfox(target: str, out_file: Path, env: Dict[str, str], cfg: Dict[str, Any]):
+    """Run Dalfox for XSS vulnerability testing"""
+    if not which("dalfox"):
+        logger.log("Dalfox not found, skipping", "WARNING")
+        return
+    
+    xss_cfg = cfg.get("xss_testing", {})
+    
+    cmd = [
+        "dalfox", "url", target,
+        "--format", "json",
+        "--output", str(out_file),
+        "--timeout", "10"
+    ]
+    
+    # Add crawling if enabled
+    if xss_cfg.get("crawl", True):
+        cmd.extend(["--crawl", "--crawl-depth", "2"])
+    
+    # Add blind XSS if enabled  
+    if xss_cfg.get("blind_xss", True):
+        cmd.append("--blind")
+    
+    run_cmd(cmd, env=env, timeout=600, check_return=False)
 
 def run_subzy(targets_file: Path, out_file: Path, env: Dict[str, str], cfg: Dict[str, Any]):
     """Run Subzy for subdomain takeover detection"""
@@ -2406,12 +2493,22 @@ def stage_vuln_scan(run_dir: Path, env: Dict[str, str], cfg: Dict[str, Any]):
                 logger.log(f"Phase 12: SQL injection testing for {target}", "INFO")
                 sqlmap_out = tdir / "sqlmap_results"
                 run_sqlmap(target_url, sqlmap_out, env, cfg)
+                
+                # Additional SQL testing
+                additional_sql_out = tdir / "additional_sql_results.json"
+                run_additional_sql_tests(target_url, additional_sql_out, env, cfg)
             
-            # Phase 13: XSS Testing with XSStrike
+            # Phase 13: XSS Testing with multiple tools
             if cfg.get("xss_testing", {}).get("enabled", True):
                 logger.log(f"Phase 13: XSS testing for {target}", "INFO")
+                
+                # XSStrike
                 xss_out = tdir / "xss_results.json"
                 run_xss_strike(target_url, xss_out, env, cfg)
+                
+                # Dalfox (additional XSS tool)
+                dalfox_out = tdir / "dalfox_results.json"
+                run_dalfox(target_url, dalfox_out, env, cfg)
             
             # Phase 14: Enhanced Nmap Vulnerability Scanning
             if cfg.get("nmap_scanning", {}).get("enabled", True):
@@ -2849,11 +2946,28 @@ def calculate_risk_score(vuln_results: Dict[str, Any]) -> Dict[str, Any]:
     total_score = 0
     severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
     
+    # Safety check: ensure vuln_results is a dictionary
+    if not isinstance(vuln_results, dict):
+        logger.log(f"Warning: vuln_results is not a dictionary, got {type(vuln_results)}", "WARNING")
+        vuln_results = {}
+    
     for target, data in vuln_results.items():
+        # Safety check: ensure data is a dictionary
+        if not isinstance(data, dict):
+            logger.log(f"Warning: data for target {target} is not a dictionary, skipping", "WARNING")
+            continue
+            
         total_score += data.get("risk_score", 0)
         nuclei_parsed = data.get("nuclei_parsed", {})
+        
+        # Safety check: ensure nuclei_parsed is a dictionary
+        if not isinstance(nuclei_parsed, dict):
+            logger.log(f"Warning: nuclei_parsed for target {target} is not a dictionary, skipping", "DEBUG")
+            continue
+            
         for severity, findings in nuclei_parsed.items():
-            severity_counts[severity] += len(findings)
+            if severity in severity_counts and isinstance(findings, (list, tuple)):
+                severity_counts[severity] += len(findings)
     
     # Calculate risk level
     if severity_counts["critical"] > 0 or total_score > 50:
