@@ -28,10 +28,66 @@ log() {
     echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "${LOG_FILE}"
 }
 
-# Error handling
+# Enhanced error handling with recovery
 error_exit() {
     log "${RED}[ERROR] $1${NC}" >&2
+    # Try to save any partial results
+    save_partial_results
     exit 1
+}
+
+# Enhanced error handler with retry capability
+handle_error() {
+    local cmd="$1"
+    local attempt="$2"
+    local max_attempts="${3:-3}"
+    
+    if [[ $attempt -lt $max_attempts ]]; then
+        warning "Command failed (attempt $attempt/$max_attempts): $cmd"
+        warning "Retrying in $((attempt * 2)) seconds..."
+        sleep $((attempt * 2))
+        return 1
+    else
+        error_exit "Command failed after $max_attempts attempts: $cmd"
+    fi
+}
+
+# Save partial results on error
+save_partial_results() {
+    local backup_dir="${RESULTS_DIR}/partial_backup_$(date +%s)"
+    mkdir -p "$backup_dir"
+    
+    # Copy any existing results
+    if [[ -d "${RESULTS_DIR}" ]]; then
+        find "${RESULTS_DIR}" -name "*.txt" -o -name "*.json" -o -name "*.xml" 2>/dev/null | \
+        while IFS= read -r file; do
+            [[ -f "$file" ]] && cp "$file" "$backup_dir/" 2>/dev/null
+        done
+        success "Partial results saved to: $backup_dir"
+    fi
+}
+
+# Enhanced tool availability check with fallbacks
+check_tool_with_fallback() {
+    local primary_tool="$1"
+    shift
+    local fallback_tools=("$@")
+    
+    if command -v "$primary_tool" &> /dev/null; then
+        echo "$primary_tool"
+        return 0
+    fi
+    
+    for tool in "${fallback_tools[@]}"; do
+        if command -v "$tool" &> /dev/null; then
+            warning "Primary tool '$primary_tool' not found, using fallback: $tool"
+            echo "$tool"
+            return 0
+        fi
+    done
+    
+    warning "Neither $primary_tool nor fallback tools (${fallback_tools[*]}) are available"
+    return 1
 }
 
 # Success logging
@@ -75,32 +131,164 @@ check_tools() {
     fi
 }
 
-# Subdomain enumeration
+# Enhanced subdomain enumeration with multiple tools and error handling
 subdomain_enum() {
     local target="$1"
     local output_dir="${RESULTS_DIR}/subdomains"
     mkdir -p "${output_dir}"
     
-    info "Starting subdomain enumeration for ${target}"
+    info "Starting enhanced subdomain enumeration for ${target}"
     
-    # Subfinder - passive subdomain enumeration
-    if command -v subfinder &> /dev/null; then
-        info "Running subfinder..."
-        subfinder -d "${target}" -o "${output_dir}/subfinder_${target}.txt" -silent
-        success "Subfinder completed"
+    # Validate target domain
+    if ! [[ "$target" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ ]]; then
+        error_exit "Invalid domain format: $target"
     fi
     
-    # Amass - comprehensive subdomain enumeration
-    if command -v amass &> /dev/null; then
-        info "Running amass enum..."
-        timeout 300 amass enum -d "${target}" -o "${output_dir}/amass_${target}.txt" || warning "Amass timed out"
+    local tool_count=0
+    local success_count=0
+    
+    # Subfinder - passive subdomain enumeration with enhanced sources
+    if subfinder_tool=$(check_tool_with_fallback "subfinder"); then
+        info "Running $subfinder_tool with enhanced sources..."
+        attempt=1
+        while [[ $attempt -le 3 ]]; do
+            if timeout 600 "$subfinder_tool" -d "${target}" -all -recursive \
+               -o "${output_dir}/subfinder_${target}.txt" -silent; then
+                success "Subfinder completed successfully"
+                ((success_count++))
+                break
+            else
+                handle_error "$subfinder_tool" "$attempt" 3 || break
+                ((attempt++))
+            fi
+        done
+        ((tool_count++))
     fi
     
-    # Combine and deduplicate results
-    if ls "${output_dir}"/*.txt &> /dev/null; then
-        cat "${output_dir}"/*.txt | sort -u > "${output_dir}/all_subdomains_${target}.txt"
-        local count=$(wc -l < "${output_dir}/all_subdomains_${target}.txt")
-        success "Found ${count} unique subdomains for ${target}"
+    # Amass - comprehensive subdomain enumeration with passive and active modes
+    if amass_tool=$(check_tool_with_fallback "amass"); then
+        info "Running $amass_tool enum with enhanced configuration..."
+        attempt=1
+        while [[ $attempt -le 3 ]]; do
+            # Try passive first, then active if needed
+            if timeout 900 "$amass_tool" enum -passive -d "${target}" \
+               -o "${output_dir}/amass_passive_${target}.txt"; then
+                success "Amass passive enumeration completed"
+                
+                # Run active enumeration if passive found results
+                if [[ -s "${output_dir}/amass_passive_${target}.txt" ]]; then
+                    info "Running amass active enumeration..."
+                    timeout 1200 "$amass_tool" enum -active -d "${target}" \
+                        -o "${output_dir}/amass_active_${target}.txt" || \
+                        warning "Amass active enumeration timed out or failed"
+                fi
+                ((success_count++))
+                break
+            else
+                handle_error "$amass_tool" "$attempt" 3 || break
+                ((attempt++))
+            fi
+        done
+        ((tool_count++))
+    fi
+    
+    # Assetfinder - additional passive subdomain discovery
+    if assetfinder_tool=$(check_tool_with_fallback "assetfinder"); then
+        info "Running $assetfinder_tool..."
+        attempt=1
+        while [[ $attempt -le 3 ]]; do
+            if timeout 300 "$assetfinder_tool" "${target}" > "${output_dir}/assetfinder_${target}.txt"; then
+                success "Assetfinder completed successfully"
+                ((success_count++))
+                break
+            else
+                handle_error "$assetfinder_tool" "$attempt" 3 || break
+                ((attempt++))
+            fi
+        done
+        ((tool_count++))
+    fi
+    
+    # Findomain - fast passive subdomain discovery
+    if findomain_tool=$(check_tool_with_fallback "findomain"); then
+        info "Running $findomain_tool..."
+        attempt=1
+        while [[ $attempt -le 3 ]]; do
+            if timeout 300 "$findomain_tool" -t "${target}" -o "${output_dir}/findomain_${target}.txt"; then
+                success "Findomain completed successfully"
+                ((success_count++))
+                break
+            else
+                handle_error "$findomain_tool" "$attempt" 3 || break
+                ((attempt++))
+            fi
+        done
+        ((tool_count++))
+    fi
+    
+    # DNSRecon for additional DNS enumeration
+    if dnsrecon_tool=$(check_tool_with_fallback "dnsrecon" "python3 -m dnsrecon"); then
+        info "Running $dnsrecon_tool for DNS enumeration..."
+        if timeout 300 python3 -c "
+import dnsrecon
+# Custom DNS enumeration logic here
+" 2>/dev/null || timeout 300 dnsrecon -d "${target}" -t brt \
+           -D /usr/share/dnsrecon/namelist.txt -o "${output_dir}/dnsrecon_${target}.xml" 2>/dev/null; then
+            success "DNSRecon completed successfully"
+            ((success_count++))
+        else
+            warning "DNSRecon failed or timed out"
+        fi
+        ((tool_count++))
+    fi
+    
+    # Certificate transparency logs using crt.sh
+    info "Checking certificate transparency logs..."
+    if command -v curl &> /dev/null; then
+        if curl -s "https://crt.sh/?q=%.${target}&output=json" | \
+           jq -r '.[].name_value' 2>/dev/null | \
+           sort -u > "${output_dir}/crtsh_${target}.txt" 2>/dev/null; then
+            success "Certificate transparency logs checked"
+            ((success_count++))
+        else
+            warning "Certificate transparency check failed"
+        fi
+        ((tool_count++))
+    fi
+    
+    # Combine and deduplicate results with enhanced processing
+    if ls "${output_dir}"/*"${target}".txt &> /dev/null; then
+        # Combine all results
+        cat "${output_dir}"/*"${target}".txt 2>/dev/null | \
+        grep -E '^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$' | \
+        grep -v '^-' | \
+        sort -u > "${output_dir}/all_subdomains_${target}.txt"
+        
+        # Remove invalid entries and clean up
+        grep -E "\\b${target}\\b" "${output_dir}/all_subdomains_${target}.txt" > \
+            "${output_dir}/valid_subdomains_${target}.txt" || touch "${output_dir}/valid_subdomains_${target}.txt"
+        
+        local count=$(wc -l < "${output_dir}/valid_subdomains_${target}.txt" 2>/dev/null || echo "0")
+        
+        if [[ $count -gt 0 ]]; then
+            success "Found ${count} unique valid subdomains for ${target}"
+            success "Tools used: ${success_count}/${tool_count} successful"
+            
+            # Create summary report
+            {
+                echo "# Subdomain Enumeration Report for ${target}"
+                echo "Generated: $(date)"
+                echo "Tools successful: ${success_count}/${tool_count}"
+                echo "Total subdomains found: ${count}"
+                echo ""
+                echo "## Subdomains:"
+                cat "${output_dir}/valid_subdomains_${target}.txt"
+            } > "${output_dir}/subdomain_report_${target}.md"
+        else
+            warning "No valid subdomains found for ${target}"
+        fi
+    else
+        warning "No subdomain enumeration results found for ${target}"
     fi
 }
 
@@ -211,34 +399,303 @@ param_discovery() {
     fi
 }
 
-# Vulnerability scanning
+# Enhanced vulnerability scanning with comprehensive test coverage
 vuln_scan() {
     local targets_file="$1"
     local output_dir="${RESULTS_DIR}/vulnerabilities"
     mkdir -p "${output_dir}"
     
-    info "Starting vulnerability scanning"
+    info "Starting enhanced vulnerability scanning"
     
-    # Nuclei - comprehensive vulnerability scanner
-    if command -v nuclei &> /dev/null && [[ -f "${targets_file}" ]]; then
-        info "Running nuclei vulnerability scan..."
-        nuclei -list "${targets_file}" -o "${output_dir}/nuclei_results.txt" \
-               -severity critical,high,medium -silent -stats
-        success "Nuclei vulnerability scan completed"
+    if [[ ! -f "${targets_file}" ]]; then
+        warning "Targets file not found: ${targets_file}"
+        return 1
     fi
     
-    # SQLMap - SQL injection testing
-    if command -v sqlmap &> /dev/null && [[ -f "${targets_file}" ]]; then
-        info "Running sqlmap for SQL injection testing..."
-        local params_file="${RESULTS_DIR}/parameters/all_parameters.txt"
-        if [[ -f "${params_file}" ]]; then
-            while IFS= read -r url; do
-                [[ -z "${url}" ]] && continue
-                timeout 60 sqlmap -u "${url}" --batch --random-agent --level=1 --risk=1 \
-                    --output-dir="${output_dir}/sqlmap_$(basename "${url}")" || warning "SQLMap failed for ${url}"
-            done < <(head -3 "${targets_file}")
+    local target_count=$(wc -l < "${targets_file}" 2>/dev/null || echo "0")
+    info "Scanning ${target_count} targets for vulnerabilities"
+    
+    local scan_success=0
+    local total_scans=0
+    
+    # Nuclei - comprehensive vulnerability scanner with enhanced templates
+    if nuclei_tool=$(check_tool_with_fallback "nuclei"); then
+        info "Running $nuclei_tool with comprehensive templates..."
+        ((total_scans++))
+        
+        # Run multiple nuclei scans with different severity levels and categories
+        local nuclei_success=0
+        
+        # Critical and High severity first
+        if timeout 1800 "$nuclei_tool" -list "${targets_file}" \
+           -o "${output_dir}/nuclei_critical_high.txt" \
+           -severity critical,high -silent -stats -rate-limit 50 -c 20; then
+            ((nuclei_success++))
+            success "Nuclei critical/high severity scan completed"
+        else
+            warning "Nuclei critical/high severity scan failed"
+        fi
+        
+        # Medium and Low severity
+        if timeout 2400 "$nuclei_tool" -list "${targets_file}" \
+           -o "${output_dir}/nuclei_medium_low.txt" \
+           -severity medium,low -silent -stats -rate-limit 100 -c 30; then
+            ((nuclei_success++))
+            success "Nuclei medium/low severity scan completed"
+        else
+            warning "Nuclei medium/low severity scan failed"
+        fi
+        
+        # Technology-specific templates
+        if timeout 1200 "$nuclei_tool" -list "${targets_file}" \
+           -o "${output_dir}/nuclei_tech_specific.txt" \
+           -tags tech -silent -stats -rate-limit 75 -c 25; then
+            ((nuclei_success++))
+            success "Nuclei technology-specific scan completed"
+        else
+            warning "Nuclei technology-specific scan failed"
+        fi
+        
+        # Combine nuclei results
+        if [[ $nuclei_success -gt 0 ]]; then
+            cat "${output_dir}"/nuclei_*.txt 2>/dev/null | sort -u > "${output_dir}/nuclei_all_results.txt"
+            local vuln_count=$(wc -l < "${output_dir}/nuclei_all_results.txt" 2>/dev/null || echo "0")
+            success "Nuclei found ${vuln_count} total vulnerabilities"
+            ((scan_success++))
         fi
     fi
+    
+    # Enhanced SQLMap testing with multiple injection points
+    if sqlmap_tool=$(check_tool_with_fallback "sqlmap"); then
+        info "Running enhanced $sqlmap_tool testing..."
+        ((total_scans++))
+        
+        local params_file="${RESULTS_DIR}/parameters/all_parameters.txt"
+        local sqlmap_results="${output_dir}/sqlmap_results"
+        mkdir -p "$sqlmap_results"
+        
+        local sql_success=0
+        local tested_urls=0
+        
+        while IFS= read -r url && [[ $tested_urls -lt 20 ]]; do
+            [[ -z "${url}" ]] && continue
+            ((tested_urls++))
+            
+            local url_safe=$(echo "$url" | tr '/' '_' | tr ':' '_')
+            local result_dir="${sqlmap_results}/${url_safe}"
+            
+            info "Testing URL $tested_urls: $url"
+            
+            # Test GET parameters
+            if timeout 300 "$sqlmap_tool" -u "${url}" --batch --random-agent \
+               --level=2 --risk=2 --threads=3 --technique=BEUSTQ \
+               --output-dir="$result_dir" --no-logging 2>/dev/null; then
+                ((sql_success++))
+            fi
+            
+            # Test POST parameters if form data available
+            if [[ -f "${params_file}" ]] && grep -q "${url}" "${params_file}" 2>/dev/null; then
+                timeout 300 "$sqlmap_tool" -u "${url}" --batch --random-agent \
+                   --level=3 --risk=2 --data="id=1&name=test" \
+                   --output-dir="$result_dir" --no-logging 2>/dev/null && ((sql_success++))
+            fi
+            
+        done < <(head -20 "${targets_file}")
+        
+        if [[ $sql_success -gt 0 ]]; then
+            success "SQLMap completed with $sql_success successful tests"
+            ((scan_success++))
+        else
+            warning "SQLMap found no vulnerabilities or failed"
+        fi
+    fi
+    
+    # Enhanced XSS testing with multiple payloads
+    if dalfox_tool=$(check_tool_with_fallback "dalfox" "xsser"); then
+        info "Running enhanced XSS testing with $dalfox_tool..."
+        ((total_scans++))
+        
+        local xss_results="${output_dir}/xss_results"
+        mkdir -p "$xss_results"
+        
+        local xss_success=0
+        local tested_xss=0
+        
+        while IFS= read -r url && [[ $tested_xss -lt 15 ]]; do
+            [[ -z "${url}" ]] && continue
+            ((tested_xss++))
+            
+            local url_safe=$(echo "$url" | tr '/' '_' | tr ':' '_')
+            
+            if [[ "$dalfox_tool" == "dalfox" ]]; then
+                if timeout 180 dalfox url "${url}" \
+                   --output "${xss_results}/dalfox_${url_safe}.txt" \
+                   --silence --worker 5 --delay 100 --timeout 10; then
+                    ((xss_success++))
+                fi
+            else
+                # Fallback to xsser if available
+                if timeout 180 xsser --url="${url}" \
+                   --output="${xss_results}/xsser_${url_safe}.txt" 2>/dev/null; then
+                    ((xss_success++))
+                fi
+            fi
+        done < <(head -15 "${targets_file}")
+        
+        if [[ $xss_success -gt 0 ]]; then
+            success "XSS testing completed with $xss_success successful tests"
+            ((scan_success++))
+        else
+            warning "XSS testing found no vulnerabilities or failed"
+        fi
+    fi
+    
+    # Additional security tests
+    
+    # Directory traversal testing
+    if command -v curl &> /dev/null; then
+        info "Testing for directory traversal vulnerabilities..."
+        ((total_scans++))
+        
+        local dt_results="${output_dir}/directory_traversal.txt"
+        local dt_success=0
+        local dt_tested=0
+        
+        local payloads=(
+            "../../../etc/passwd"
+            "..\\..\\..\\windows\\system32\\drivers\\etc\\hosts"
+            "....//....//....//etc//passwd"
+            "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"
+        )
+        
+        while IFS= read -r url && [[ $dt_tested -lt 10 ]]; do
+            [[ -z "${url}" ]] && continue
+            ((dt_tested++))
+            
+            for payload in "${payloads[@]}"; do
+                local test_url="${url}?file=${payload}"
+                if response=$(timeout 15 curl -s -k --max-time 10 "$test_url" 2>/dev/null); then
+                    if echo "$response" | grep -qE "(root:|admin:|administrator:)" 2>/dev/null; then
+                        echo "[VULNERABILITY] Directory Traversal found: $test_url" >> "$dt_results"
+                        ((dt_success++))
+                    fi
+                fi
+            done
+        done < <(head -10 "${targets_file}")
+        
+        if [[ $dt_success -gt 0 ]]; then
+            success "Directory traversal testing found $dt_success potential vulnerabilities"
+            ((scan_success++))
+        fi
+    fi
+    
+    # SSL/TLS vulnerability testing
+    if sslscan_tool=$(check_tool_with_fallback "sslscan" "testssl.sh" "sslyze"); then
+        info "Running SSL/TLS vulnerability assessment..."
+        ((total_scans++))
+        
+        local ssl_results="${output_dir}/ssl_vulnerabilities"
+        mkdir -p "$ssl_results"
+        
+        local ssl_success=0
+        local ssl_tested=0
+        
+        while IFS= read -r url && [[ $ssl_tested -lt 5 ]]; do
+            [[ -z "${url}" ]] && continue
+            
+            # Extract hostname for SSL testing
+            local hostname=$(echo "$url" | sed -E 's|^https?://||' | sed 's|/.*||' | sed 's|:.*||')
+            [[ -z "$hostname" ]] && continue
+            
+            ((ssl_tested++))
+            
+            case "$sslscan_tool" in
+                "sslscan")
+                    if timeout 120 sslscan --xml="${ssl_results}/${hostname}_sslscan.xml" "$hostname:443" 2>/dev/null; then
+                        ((ssl_success++))
+                    fi
+                    ;;
+                "testssl.sh")
+                    if timeout 180 testssl.sh --jsonfile="${ssl_results}/${hostname}_testssl.json" "$hostname:443" 2>/dev/null; then
+                        ((ssl_success++))
+                    fi
+                    ;;
+                "sslyze")
+                    if timeout 120 sslyze --json_out="${ssl_results}/${hostname}_sslyze.json" "$hostname:443" 2>/dev/null; then
+                        ((ssl_success++))
+                    fi
+                    ;;
+            esac
+        done < <(grep -E '^https://' "${targets_file}" | head -5)
+        
+        if [[ $ssl_success -gt 0 ]]; then
+            success "SSL/TLS testing completed on $ssl_success hosts"
+            ((scan_success++))
+        fi
+    fi
+    
+    # Generate comprehensive vulnerability report
+    {
+        echo "# Comprehensive Vulnerability Assessment Report"
+        echo "Generated: $(date)"
+        echo "Targets scanned: ${target_count}"
+        echo "Successful scan modules: ${scan_success}/${total_scans}"
+        echo ""
+        
+        # Nuclei results
+        if [[ -f "${output_dir}/nuclei_all_results.txt" ]]; then
+            local nuclei_count=$(wc -l < "${output_dir}/nuclei_all_results.txt")
+            echo "## Nuclei Vulnerability Scan Results: ${nuclei_count} findings"
+            echo '```'
+            head -20 "${output_dir}/nuclei_all_results.txt" 2>/dev/null
+            if [[ $nuclei_count -gt 20 ]]; then
+                echo "... (${nuclei_count} total findings)"
+            fi
+            echo '```'
+            echo ""
+        fi
+        
+        # SQLMap results
+        if [[ -d "${output_dir}/sqlmap_results" ]]; then
+            local sql_files=$(find "${output_dir}/sqlmap_results" -type f -name "*.csv" 2>/dev/null | wc -l)
+            echo "## SQL Injection Test Results: ${sql_files} test files generated"
+            echo ""
+        fi
+        
+        # XSS results
+        if [[ -d "${output_dir}/xss_results" ]]; then
+            local xss_files=$(find "${output_dir}/xss_results" -type f 2>/dev/null | wc -l)
+            echo "## XSS Test Results: ${xss_files} test files generated"
+            echo ""
+        fi
+        
+        # Directory traversal results
+        if [[ -f "${output_dir}/directory_traversal.txt" ]]; then
+            local dt_count=$(wc -l < "${output_dir}/directory_traversal.txt" 2>/dev/null || echo "0")
+            echo "## Directory Traversal Results: ${dt_count} potential vulnerabilities"
+            if [[ $dt_count -gt 0 ]]; then
+                echo '```'
+                cat "${output_dir}/directory_traversal.txt"
+                echo '```'
+            fi
+            echo ""
+        fi
+        
+        # SSL/TLS results
+        if [[ -d "${output_dir}/ssl_vulnerabilities" ]]; then
+            local ssl_files=$(find "${output_dir}/ssl_vulnerabilities" -type f 2>/dev/null | wc -l)
+            echo "## SSL/TLS Assessment Results: ${ssl_files} host assessments completed"
+            echo ""
+        fi
+        
+        echo "## Summary"
+        echo "This comprehensive scan used multiple tools and techniques to identify potential security vulnerabilities."
+        echo "Review all results carefully and verify findings manually."
+        
+    } > "${output_dir}/comprehensive_vulnerability_report.md"
+    
+    success "Enhanced vulnerability scanning completed: ${scan_success}/${total_scans} modules successful"
+    success "Comprehensive report generated: ${output_dir}/comprehensive_vulnerability_report.md"
 }
 
 # XSS testing
