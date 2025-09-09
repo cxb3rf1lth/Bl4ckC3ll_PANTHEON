@@ -6629,7 +6629,7 @@ def create_tool_status_report():
         logger.log(f"Failed to create tool status report: {e}", "ERROR")
 
 # ---------- BCAR Integration Functions ----------
-def run_bcar_enhanced_reconnaissance(rd: RunData, env: Environment, cfg: Dict[str, Any]):
+def run_bcar_enhanced_reconnaissance(rd, env, cfg):
     """Run BCAR enhanced reconnaissance module"""
     if not BCAR_AVAILABLE:
         logger.log("BCAR module not available. Please check bcar.py installation.", "WARNING")
@@ -6689,7 +6689,7 @@ def run_bcar_enhanced_reconnaissance(rd: RunData, env: Environment, cfg: Dict[st
     except Exception as e:
         logger.log(f"BCAR reconnaissance failed: {e}", "ERROR")
 
-def run_advanced_subdomain_takeover(rd: RunData, env: Environment, cfg: Dict[str, Any]):
+def run_advanced_subdomain_takeover(rd, env, cfg):
     """Run advanced subdomain takeover detection and exploitation"""
     if not BCAR_AVAILABLE:
         logger.log("BCAR module required for subdomain takeover detection", "WARNING")
@@ -6758,16 +6758,16 @@ def run_advanced_subdomain_takeover(rd: RunData, env: Environment, cfg: Dict[str
     except Exception as e:
         logger.log(f"Subdomain takeover detection failed: {e}", "ERROR")
 
-def run_automated_payload_injection(rd: RunData, env: Environment, cfg: Dict[str, Any]):
+def run_automated_payload_injection(rd, env, cfg):
     """Run automated payload injection with reverse shell capabilities"""
     logger.log("💉 Starting Automated Payload Injection...", "INFO")
     
     try:
         # Get configuration
         payload_config = cfg.get('payload_injection', {
-            'lhost': env.get_config_value('payload', 'lhost', '127.0.0.1'),
-            'lport': env.get_config_value('payload', 'lport', 4444),
-            'test_mode': env.get_config_value('payload', 'test_mode', True)
+            'lhost': cfg.get('payload', {}).get('lhost', '127.0.0.1'),
+            'lport': cfg.get('payload', {}).get('lport', 4444),
+            'test_mode': cfg.get('payload', {}).get('test_mode', True)
         })
         
         lhost = payload_config['lhost']
@@ -6839,7 +6839,7 @@ msfconsole -x "use exploit/multi/handler; set PAYLOAD linux/x86/meterpreter/reve
     except Exception as e:
         logger.log(f"Automated payload injection failed: {e}", "ERROR")
 
-def run_comprehensive_fuzzing(rd: RunData, env: Environment, cfg: Dict[str, Any]):
+def run_comprehensive_fuzzing(rd, env, cfg):
     """Run comprehensive fuzzing with BCAR integration"""
     logger.log("🔀 Starting Comprehensive Fuzzing...", "INFO")
     
@@ -6888,6 +6888,7 @@ def run_comprehensive_fuzzing(rd: RunData, env: Environment, cfg: Dict[str, Any]
             for target in targets[:5]:  # Limit for demo
                 for path in common_paths:
                     try:
+                        import requests
                         url = f"{target.rstrip('/')}/{path}"
                         response = requests.get(url, timeout=5, allow_redirects=False)
                         if response.status_code in [200, 301, 302, 403]:
