@@ -4748,13 +4748,13 @@ def display_menu():
 
 def get_choice() -> int:
     try:
-        s = input("\n\033[93mSelect (1-24): \033[0m").strip()
+        s = input("\n\033[93mSelect (1-28): \033[0m").strip()
         if s.isdigit():
             n = int(s)
-            if 1 <= n <= 24:
+            if 1 <= n <= 28:
                 return n
     except (EOFError, KeyboardInterrupt):
-        return 24
+        return 28
     except Exception as e:
             logging.warning(f"Operation failed: {e}")
             # Consider if this error should be handled differently
