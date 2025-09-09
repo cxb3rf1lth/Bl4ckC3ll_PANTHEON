@@ -53,6 +53,8 @@ package-lock.json
 .coverage
 htmlcov/
 *.cover
+test_*.py
+demo_*.py
 
 # Application specific
 runs/
