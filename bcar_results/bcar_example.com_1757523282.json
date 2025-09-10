@@ -1,0 +1,10 @@
+{
+  "domain": "example.com",
+  "scan_time": "2025-09-10T16:54:42.480938",
+  "subdomains": [],
+  "takeover_vulnerabilities": [],
+  "open_ports": {},
+  "technologies": {},
+  "directories": [],
+  "parameters": []
+}

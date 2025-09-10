@@ -2404,12 +2404,31 @@ def merge_wordlists(seclists_path: Path, payloads_path: Path, probable_wordlists
     logger.log(f"Merged {len(uniq)} unique lines from {len(all_files)} files -> {merged_file}", "SUCCESS")
 
 # ---------- Run Management ----------
+class RunData:
+    """Simple container for run information"""
+    def __init__(self, run_dir: Path, run_name: str = None):
+        self.run_dir = run_dir
+        self.run_name = run_name or run_dir.name
+        self.targets_list = None
+
 def new_run() -> Path:
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     logger.log(f"Created run: {run_dir}", "INFO")
     return run_dir
+
+def start_run(run_type: str) -> Tuple[RunData, Dict[str, str]]:
+    """Initialize a run with proper data structures"""
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + run_type + "_" + str(uuid.uuid4())[:8]
+    run_dir = RUNS_DIR / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    
+    rd = RunData(run_dir, run_type)
+    env = env_with_lists()
+    
+    logger.log(f"Created {run_type} run: {run_dir}", "INFO")
+    return rd, env
 
 def env_with_lists() -> Dict[str, str]:
     env = os.environ.copy()
@@ -6297,7 +6316,7 @@ def main():
     
     print(BANNER)
     print(f"\033[91m{APP} v{VERSION}-ENHANCED\033[0m by {AUTHOR}")
-    print(f"\033[93m[SECURITY] Advanced Security Testing Framework with Enhanced Capabilities 🛡️\033[0m")
+    print(f"\033[93m[SECURITY] Advanced Security Testing Framework with Enhanced Capabilities\033[0m")
     
     # Validate dependencies and environment
     if not validate_dependencies():
@@ -6732,7 +6751,7 @@ def run_bcar_enhanced_reconnaissance(rd, env, cfg):
         logger.log("BCAR module not available. Please check bcar.py installation.", "WARNING")
         return
     
-    logger.log("🔍 Starting BCAR Enhanced Reconnaissance...", "INFO")
+    logger.log("Starting BCAR Enhanced Reconnaissance...", "INFO")
     
     try:
         # Initialize BCAR integration
@@ -6772,7 +6791,7 @@ def run_bcar_enhanced_reconnaissance(rd, env, cfg):
         with open(bcar_output_file, 'w') as f:
             json.dump(bcar_results, f, indent=2)
         
-        logger.log(f"✅ BCAR results saved to: {bcar_output_file}", "SUCCESS")
+        logger.log(f"BCAR results saved to: {bcar_output_file}", "SUCCESS")
         
         # Log summary
         total_subdomains = 0
@@ -6792,7 +6811,7 @@ def run_advanced_subdomain_takeover(rd, env, cfg):
         logger.log("BCAR module required for subdomain takeover detection", "WARNING")
         return
     
-    logger.log("🎯 Starting Advanced Subdomain Takeover Detection...", "INFO")
+    logger.log("Starting Advanced Subdomain Takeover Detection...", "INFO")
     
     try:
         bcar = BCARCore()
@@ -6843,10 +6862,10 @@ def run_advanced_subdomain_takeover(rd, env, cfg):
                 'vulnerabilities': vulnerabilities
             }, f, indent=2)
         
-        logger.log(f"✅ Subdomain takeover results saved to: {takeover_file}", "SUCCESS")
+        logger.log(f"Subdomain takeover results saved to: {takeover_file}", "SUCCESS")
         
         if vulnerabilities:
-            logger.log(f"🚨 Found {len(vulnerabilities)} potential subdomain takeover vulnerabilities!", "WARNING")
+            logger.log(f"Found {len(vulnerabilities)} potential subdomain takeover vulnerabilities!", "WARNING")
             for vuln in vulnerabilities:
                 logger.log(f"  - {vuln['subdomain']} ({vuln['service']}) - {vuln['confidence']} confidence", "WARNING")
         else:
@@ -6857,7 +6876,7 @@ def run_advanced_subdomain_takeover(rd, env, cfg):
 
 def run_automated_payload_injection(rd, env, cfg):
     """Run automated payload injection with reverse shell capabilities"""
-    logger.log("💉 Starting Automated Payload Injection...", "INFO")
+    logger.log("Starting Automated Payload Injection...", "INFO")
     
     try:
         # Get configuration
@@ -6892,7 +6911,7 @@ def run_automated_payload_injection(rd, env, cfg):
                 'payloads': payloads
             }, f, indent=2)
         
-        logger.log(f"✅ Generated {len(payloads)} payloads saved to: {payloads_file}", "SUCCESS")
+        logger.log(f"Generated {len(payloads)} payloads saved to: {payloads_file}", "SUCCESS")
         
         # Generate payload files in payloads directory
         payload_scripts_dir = PAYLOADS_DIR / f"run_{rd.run_name}"
@@ -6912,14 +6931,14 @@ def run_automated_payload_injection(rd, env, cfg):
                 with open(payload_file, 'w') as f:
                     f.write(payload_content)
         
-        logger.log(f"✅ Payload scripts saved to: {payload_scripts_dir}", "SUCCESS")
+        logger.log(f"Payload scripts saved to: {payload_scripts_dir}", "SUCCESS")
         
         # In test mode, just log what would be done
         if test_mode:
-            logger.log("🧪 Test mode enabled - payloads generated but not executed", "INFO")
+            logger.log("Test mode enabled - payloads generated but not executed", "INFO")
             logger.log("To enable payload injection, set test_mode: false in configuration", "INFO")
         else:
-            logger.log("⚠️  Payload injection is enabled - use responsibly and only on authorized targets", "WARNING")
+            logger.log("Payload injection is enabled - use responsibly and only on authorized targets", "WARNING")
         
         # Create listener setup script
         listener_script = payload_scripts_dir / "setup_listener.sh"
@@ -6931,14 +6950,14 @@ msfconsole -x "use exploit/multi/handler; set PAYLOAD linux/x86/meterpreter/reve
 """)
         listener_script.chmod(0o755)
         
-        logger.log(f"✅ Listener setup script: {listener_script}", "SUCCESS")
+        logger.log(f"Listener setup script: {listener_script}", "SUCCESS")
         
     except Exception as e:
         logger.log(f"Automated payload injection failed: {e}", "ERROR")
 
 def run_comprehensive_fuzzing(rd, env, cfg):
     """Run comprehensive fuzzing with BCAR integration"""
-    logger.log("🔀 Starting Comprehensive Fuzzing...", "INFO")
+    logger.log("Starting Comprehensive Fuzzing...", "INFO")
     
     try:
         # Get targets for fuzzing
@@ -7006,7 +7025,7 @@ def run_comprehensive_fuzzing(rd, env, cfg):
                 'findings': fuzzing_results
             }, f, indent=2)
         
-        logger.log(f"✅ Fuzzing results saved to: {fuzzing_file}", "SUCCESS")
+        logger.log(f"Fuzzing results saved to: {fuzzing_file}", "SUCCESS")
         logger.log(f"Fuzzing complete: {len(fuzzing_results)} interesting paths discovered", "INFO")
         
     except Exception as e:
