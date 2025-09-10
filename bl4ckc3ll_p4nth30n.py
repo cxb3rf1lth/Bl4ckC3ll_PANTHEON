@@ -5918,9 +5918,11 @@ def run_automated_testing_chain():
         print("\n--- Phase 2: Enhanced Reconnaissance ---")
         run_enhanced_recon()
         
-        # Phase 3: Bug Bounty Automation
-        print("\n--- Phase 3: Bug Bounty Automation ---")
-        run_bug_bounty_automation()
+        # Phase 3: Enhanced Bug Bounty Automation
+        print("\n--- Phase 3: Enhanced Bug Bounty Automation ---")
+        rd, env = start_run("auto_chain_bug_bounty")
+        cfg = load_cfg()
+        run_enhanced_bug_bounty_automation(rd, env, cfg)
         
         # Phase 4: Advanced Vulnerability Scanning
         print("\n--- Phase 4: Advanced Vulnerability Scanning ---") 
@@ -6324,6 +6326,9 @@ def main():
         logger.log("Continuing with available functionality...", "WARNING")
         time.sleep(2)
     
+    # Auto-fix missing dependencies and wordlists
+    auto_fix_missing_dependencies()
+    
     if not check_and_setup_environment():
         logger.log("Environment setup issues detected. Some features may not work correctly.", "WARNING")
         time.sleep(1)
@@ -6368,7 +6373,11 @@ def main():
         elif c == 18:
             run_eslint_security_check()
         elif c == 19:
-            run_bug_bounty_automation()
+            # Enhanced Bug Bounty Automation
+            rd, env = start_run("enhanced_bug_bounty")
+            cfg = load_cfg()
+            run_enhanced_bug_bounty_automation(rd, env, cfg)
+            input("Press Enter to continue...")
         elif c == 20:
             run_automated_testing_chain()
         elif c == 21:
@@ -6804,6 +6813,350 @@ def run_bcar_enhanced_reconnaissance(rd, env, cfg):
         
     except Exception as e:
         logger.log(f"BCAR reconnaissance failed: {e}", "ERROR")
+
+# ---------- Enhanced Bug Bounty Integration Functions ----------
+
+def run_enhanced_bug_bounty_automation(rd: Path, env: Dict[str, str], cfg: Dict[str, Any]):
+    """Enhanced bug bounty automation with integrated functionality from bug_bounty_commands.sh"""
+    logger.log("Starting Enhanced Bug Bounty Automation...", "INFO")
+    
+    try:
+        # Get targets
+        targets = []
+        if TARGETS.exists():
+            with open(TARGETS, 'r') as f:
+                targets = [line.strip() for line in f if line.strip() and validate_domain_input(line.strip())]
+        
+        if not targets:
+            logger.log("No valid targets found for bug bounty automation", "ERROR")
+            return
+        
+        results_dir = rd / "bug_bounty_results"
+        results_dir.mkdir(exist_ok=True)
+        
+        bug_bounty_summary = {
+            "timestamp": datetime.now().isoformat(),
+            "targets_scanned": len(targets),
+            "total_subdomains": 0,
+            "total_vulnerabilities": 0,
+            "tools_used": [],
+            "results": {}
+        }
+        
+        for target in targets:
+            logger.log(f"Processing target: {target}", "INFO")
+            target_results = run_comprehensive_bug_bounty_scan(target, results_dir, cfg)
+            bug_bounty_summary["results"][target] = target_results
+            bug_bounty_summary["total_subdomains"] += target_results.get("subdomains_found", 0)
+            bug_bounty_summary["total_vulnerabilities"] += target_results.get("vulnerabilities_found", 0)
+        
+        # Save comprehensive results
+        summary_file = results_dir / "bug_bounty_summary.json"
+        with open(summary_file, 'w') as f:
+            json.dump(bug_bounty_summary, f, indent=2)
+        
+        logger.log(f"Bug bounty automation completed. Found {bug_bounty_summary['total_subdomains']} subdomains and {bug_bounty_summary['total_vulnerabilities']} potential vulnerabilities", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"Bug bounty automation failed: {e}", "ERROR")
+
+def run_comprehensive_bug_bounty_scan(target: str, results_dir: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Run comprehensive bug bounty scan for a single target"""
+    target_dir = results_dir / target
+    target_dir.mkdir(exist_ok=True)
+    
+    scan_results = {
+        "target": target,
+        "subdomains_found": 0,
+        "vulnerabilities_found": 0,
+        "scan_phases": {}
+    }
+    
+    # Phase 1: Enhanced Subdomain Enumeration
+    logger.log(f"Phase 1: Enhanced subdomain enumeration for {target}", "INFO")
+    subdomain_results = run_enhanced_subdomain_enumeration(target, target_dir, cfg)
+    scan_results["scan_phases"]["subdomain_enumeration"] = subdomain_results
+    scan_results["subdomains_found"] = len(subdomain_results.get("subdomains", []))
+    
+    # Phase 2: Port Scanning and Service Detection
+    if subdomain_results.get("subdomains"):
+        logger.log(f"Phase 2: Port scanning and service detection", "INFO")
+        port_results = run_enhanced_port_scanning(subdomain_results["subdomains"], target_dir, cfg)
+        scan_results["scan_phases"]["port_scanning"] = port_results
+    
+    # Phase 3: Web Application Discovery
+    logger.log(f"Phase 3: Web application discovery", "INFO")
+    webapp_results = run_enhanced_web_discovery(target, target_dir, cfg)
+    scan_results["scan_phases"]["web_discovery"] = webapp_results
+    
+    # Phase 4: Vulnerability Assessment
+    logger.log(f"Phase 4: Vulnerability assessment", "INFO")
+    vuln_results = run_enhanced_vulnerability_assessment(target, target_dir, cfg)
+    scan_results["scan_phases"]["vulnerability_assessment"] = vuln_results
+    scan_results["vulnerabilities_found"] = len(vuln_results.get("vulnerabilities", []))
+    
+    return scan_results
+
+def run_enhanced_subdomain_enumeration(target: str, target_dir: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Enhanced subdomain enumeration using multiple tools and techniques"""
+    subdomain_results = {
+        "subdomains": set(),
+        "tools_used": [],
+        "errors": []
+    }
+    
+    # Tool configurations with fallbacks
+    tools_config = [
+        {"name": "subfinder", "cmd": ["subfinder", "-d", target, "-all", "-silent"], "timeout": 300},
+        {"name": "assetfinder", "cmd": ["assetfinder", "--subs-only", target], "timeout": 180},
+        {"name": "findomain", "cmd": ["findomain", "-t", target, "-q"], "timeout": 240},
+    ]
+    
+    # Use amass if available (longer timeout due to comprehensiveness)
+    if which("amass"):
+        tools_config.append({
+            "name": "amass", 
+            "cmd": ["amass", "enum", "-passive", "-d", target], 
+            "timeout": 600
+        })
+    
+    for tool_config in tools_config:
+        tool_name = tool_config["name"]
+        if which(tool_name):
+            try:
+                logger.log(f"Running {tool_name} for subdomain enumeration", "DEBUG")
+                result = run_cmd(
+                    tool_config["cmd"], 
+                    timeout=tool_config["timeout"], 
+                    capture=True, 
+                    check_return=False
+                )
+                
+                if result and result.stdout:
+                    new_subdomains = set(line.strip() for line in result.stdout.splitlines() if line.strip())
+                    subdomain_results["subdomains"].update(new_subdomains)
+                    subdomain_results["tools_used"].append(tool_name)
+                    logger.log(f"{tool_name} found {len(new_subdomains)} subdomains", "DEBUG")
+                
+            except Exception as e:
+                error_msg = f"{tool_name} failed: {str(e)}"
+                subdomain_results["errors"].append(error_msg)
+                logger.log(error_msg, "WARNING")
+    
+    # Certificate Transparency search (fallback)
+    try:
+        ct_subdomains = search_certificate_transparency(target)
+        if ct_subdomains:
+            subdomain_results["subdomains"].update(ct_subdomains)
+            subdomain_results["tools_used"].append("certificate_transparency")
+            logger.log(f"Certificate transparency found {len(ct_subdomains)} subdomains", "DEBUG")
+    except Exception as e:
+        subdomain_results["errors"].append(f"Certificate transparency failed: {str(e)}")
+    
+    # Convert set to list for JSON serialization
+    subdomain_results["subdomains"] = sorted(list(subdomain_results["subdomains"]))
+    
+    # Save subdomains to file
+    subdomain_file = target_dir / f"{target}_subdomains.txt"
+    with open(subdomain_file, 'w') as f:
+        f.write('\n'.join(subdomain_results["subdomains"]))
+    
+    return subdomain_results
+
+def search_certificate_transparency(domain: str) -> List[str]:
+    """Search Certificate Transparency logs for subdomains"""
+    subdomains = set()
+    
+    ct_urls = [
+        f"https://crt.sh/?q=%25.{domain}&output=json",
+        f"https://api.certspotter.com/v1/issuances?domain={domain}&include_subdomains=true&expand=dns_names"
+    ]
+    
+    for url in ct_urls:
+        try:
+            import requests
+            response = requests.get(url, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                if 'crt.sh' in url:
+                    for entry in data[:1000]:  # Limit to prevent excessive results
+                        name_value = entry.get('name_value', '')
+                        for name in name_value.split('\n'):
+                            name = name.strip().lower()
+                            if name and domain in name and not name.startswith('*'):
+                                subdomains.add(name)
+                elif 'certspotter' in url:
+                    for entry in data[:1000]:
+                        dns_names = entry.get('dns_names', [])
+                        for name in dns_names:
+                            name = name.strip().lower()
+                            if name and domain in name and not name.startswith('*'):
+                                subdomains.add(name)
+        except Exception:
+            continue
+    
+    return list(subdomains)
+
+def run_enhanced_port_scanning(subdomains: List[str], target_dir: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Enhanced port scanning and service detection"""
+    port_results = {
+        "live_hosts": [],
+        "services_found": {},
+        "tools_used": [],
+        "errors": []
+    }
+    
+    # First, check which hosts are live
+    live_hosts = []
+    if which("httpx"):
+        try:
+            # Create temporary file with subdomains
+            subdomains_file = target_dir / "temp_subdomains.txt"
+            with open(subdomains_file, 'w') as f:
+                f.write('\n'.join(subdomains))
+            
+            # Use httpx to find live hosts
+            result = run_cmd([
+                "httpx", "-l", str(subdomains_file), "-silent", "-status-code", 
+                "-tech-detect", "-title", "-json"
+            ], timeout=600, capture=True, check_return=False)
+            
+            if result and result.stdout:
+                for line in result.stdout.splitlines():
+                    try:
+                        host_data = json.loads(line)
+                        if host_data.get("status-code"):
+                            live_hosts.append(host_data["url"])
+                            port_results["services_found"][host_data["url"]] = {
+                                "status_code": host_data.get("status-code"),
+                                "title": host_data.get("title", ""),
+                                "tech": host_data.get("tech", [])
+                            }
+                    except json.JSONDecodeError:
+                        continue
+            
+            port_results["tools_used"].append("httpx")
+            subdomains_file.unlink()  # Clean up temp file
+            
+        except Exception as e:
+            port_results["errors"].append(f"httpx failed: {str(e)}")
+    
+    port_results["live_hosts"] = live_hosts
+    return port_results
+
+def run_enhanced_web_discovery(target: str, target_dir: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Enhanced web application discovery and crawling"""
+    web_results = {
+        "endpoints": [],
+        "parameters": [],
+        "technologies": [],
+        "tools_used": [],
+        "errors": []
+    }
+    
+    # Directory and file discovery
+    if which("ffuf"):
+        try:
+            # Use local wordlist or create a basic one
+            wordlist_file = EXTRA_DIR / "paths_extra.txt"
+            if not wordlist_file.exists():
+                basic_paths = ["admin", "api", "backup", "config", "login", "test", "upload"]
+                wordlist_file.parent.mkdir(exist_ok=True)
+                with open(wordlist_file, 'w') as f:
+                    f.write('\n'.join(basic_paths))
+            
+            result = run_cmd([
+                "ffuf", "-u", f"http://{target}/FUZZ", "-w", str(wordlist_file),
+                "-mc", "200,204,301,302,307,401,403", "-fs", "0", "-s"
+            ], timeout=300, capture=True, check_return=False)
+            
+            if result and result.stdout:
+                endpoints = []
+                for line in result.stdout.splitlines():
+                    if "Status:" in line:
+                        endpoints.append(line.strip())
+                web_results["endpoints"] = endpoints
+                web_results["tools_used"].append("ffuf")
+                
+        except Exception as e:
+            web_results["errors"].append(f"ffuf failed: {str(e)}")
+    
+    return web_results
+
+def run_enhanced_vulnerability_assessment(target: str, target_dir: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Enhanced vulnerability assessment using multiple scanners"""
+    vuln_results = {
+        "vulnerabilities": [],
+        "tools_used": [],
+        "errors": []
+    }
+    
+    # Nuclei scanning if available
+    if which("nuclei"):
+        try:
+            result = run_cmd([
+                "nuclei", "-u", f"http://{target}", "-severity", "info,low,medium,high,critical",
+                "-jsonl", "-silent"
+            ], timeout=600, capture=True, check_return=False)
+            
+            if result and result.stdout:
+                vulnerabilities = []
+                for line in result.stdout.splitlines():
+                    try:
+                        vuln_data = json.loads(line)
+                        vulnerabilities.append({
+                            "template_id": vuln_data.get("template-id"),
+                            "severity": vuln_data.get("info", {}).get("severity"),
+                            "name": vuln_data.get("info", {}).get("name"),
+                            "url": vuln_data.get("matched-at")
+                        })
+                    except json.JSONDecodeError:
+                        continue
+                
+                vuln_results["vulnerabilities"] = vulnerabilities
+                vuln_results["tools_used"].append("nuclei")
+                
+        except Exception as e:
+            vuln_results["errors"].append(f"nuclei failed: {str(e)}")
+    
+    return vuln_results
+
+def auto_fix_missing_dependencies():
+    """Automatically fix missing dependencies and wordlists"""
+    try:
+        # Ensure essential directories exist
+        essential_dirs = [EXTRA_DIR, EXT_DIR, MERGED_DIR, PAYLOADS_DIR]
+        for dir_path in essential_dirs:
+            dir_path.mkdir(exist_ok=True)
+        
+        # Create missing wordlists
+        wordlists_to_create = {
+            EXTRA_DIR / "common_directories.txt": [
+                "admin", "api", "app", "backup", "config", "data", "debug", 
+                "dev", "docs", "files", "images", "login", "test", "upload"
+            ],
+            EXTRA_DIR / "common_parameters.txt": [
+                "id", "user", "password", "token", "key", "file", "path", 
+                "url", "redirect", "callback", "search", "query"
+            ],
+            EXTRA_DIR / "common_subdomains.txt": [
+                "www", "mail", "api", "admin", "dev", "test", "staging",
+                "blog", "app", "secure", "portal", "dashboard"
+            ]
+        }
+        
+        for wordlist_path, words in wordlists_to_create.items():
+            if not wordlist_path.exists():
+                with open(wordlist_path, 'w') as f:
+                    f.write('\n'.join(words))
+                logger.log(f"Created missing wordlist: {wordlist_path.name}", "INFO")
+        
+        logger.log("Dependencies auto-fix completed", "SUCCESS")
+        return True
+        
+    except Exception as e:
+        logger.log(f"Auto-fix failed: {e}", "ERROR")
+        return False
 
 def run_advanced_subdomain_takeover(rd, env, cfg):
     """Run advanced subdomain takeover detection and exploitation"""

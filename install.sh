@@ -619,6 +619,319 @@ EOF
     fi
 }
 
+# Enhanced automated tool installation
+install_security_tools() {
+    log_info "Starting automated security tool installation..."
+    
+    local install_success=0
+    local install_failed=0
+    
+    # Install Go if not present
+    if ! command -v go &> /dev/null; then
+        log_warning "Go not found - installing Go first..."
+        install_go
+        setup_go_env
+    fi
+    
+    # Install APT tools
+    log_info "Installing APT-based security tools..."
+    local apt_tools=("nmap" "sqlmap" "nikto" "dirb" "masscan" "sslscan" "dnsrecon" "whois" "curl" "wget")
+    
+    if command -v apt &> /dev/null; then
+        sudo apt update -qq
+        for tool in "${apt_tools[@]}"; do
+            if ! command -v "$tool" &> /dev/null; then
+                log_info "Installing $tool..."
+                if sudo apt install -y "$tool" &> /dev/null; then
+                    log_success "✓ $tool installed successfully"
+                    ((install_success++))
+                else
+                    log_error "✗ Failed to install $tool"
+                    ((install_failed++))
+                fi
+            else
+                log_info "✓ $tool already installed"
+            fi
+        done
+    fi
+    
+    # Install Go-based security tools
+    log_info "Installing Go-based security tools..."
+    local go_tools=(
+        "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+        "github.com/projectdiscovery/httpx/cmd/httpx@latest" 
+        "github.com/projectdiscovery/naabu/v2/cmd/naabu@latest"
+        "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
+        "github.com/projectdiscovery/katana/cmd/katana@latest"
+        "github.com/lc/gau/v2/cmd/gau@latest"
+        "github.com/ffuf/ffuf/v2@latest"
+        "github.com/OJ/gobuster/v3@latest"
+        "github.com/epi052/feroxbuster@latest"
+        "github.com/tomnomnom/waybackurls@latest"
+        "github.com/jaeles-project/gospider@latest"
+        "github.com/haccer/subjack@latest"
+        "github.com/LukaSikic/subzy@latest"
+        "github.com/devanshbatham/paramspider@latest"
+        "github.com/hahwul/dalfox/v2@latest"
+        "github.com/tomnomnom/assetfinder@latest"
+    )
+    
+    for tool_url in "${go_tools[@]}"; do
+        tool_name=$(basename "${tool_url%@*}")
+        if ! command -v "$tool_name" &> /dev/null; then
+            log_info "Installing $tool_name..."
+            if timeout 120 go install -v "$tool_url" &> /dev/null; then
+                log_success "✓ $tool_name installed successfully"
+                ((install_success++))
+            else
+                log_warning "✗ Failed to install $tool_name (timeout or error)"
+                ((install_failed++))
+            fi
+        else
+            log_info "✓ $tool_name already installed"
+        fi
+    done
+    
+    # Install Python tools
+    log_info "Installing Python-based security tools..."
+    local python_tools=("arjun" "dirsearch" "xsstrike")
+    
+    for tool in "${python_tools[@]}"; do
+        if ! command -v "$tool" &> /dev/null && ! python3 -c "import $tool" &> /dev/null; then
+            log_info "Installing $tool..."
+            if pip3 install --user "$tool" &> /dev/null; then
+                log_success "✓ $tool installed successfully"
+                ((install_success++))
+            else
+                log_warning "✗ Failed to install $tool"
+                ((install_failed++))
+            fi
+        else
+            log_info "✓ $tool already available"
+        fi
+    done
+    
+    log_info "Installation complete: $install_success successful, $install_failed failed"
+}
+
+# Enhanced wordlist creation and management
+create_enhanced_wordlists() {
+    log_info "Creating and downloading essential wordlists..."
+    
+    mkdir -p wordlists_extra lists_merged external_lists payloads
+    
+    # Create comprehensive directory wordlist
+    if [[ ! -f "wordlists_extra/directories_comprehensive.txt" ]]; then
+        cat > wordlists_extra/directories_comprehensive.txt << 'EOF'
+admin
+administrator
+api
+app
+application
+assets
+backup
+backups
+bin
+blog
+cache
+cgi-bin
+config
+configuration
+console
+content
+data
+database
+db
+debug
+dev
+development
+doc
+docs
+download
+downloads
+etc
+files
+home
+html
+images
+img
+includes
+js
+lib
+library
+log
+login
+logs
+mail
+manager
+media
+old
+panel
+phpinfo
+private
+public
+setup
+src
+static
+temp
+test
+tmp
+upload
+uploads
+user
+users
+var
+web
+www
+xml
+EOF
+    fi
+    
+    # Create comprehensive parameter wordlist
+    if [[ ! -f "wordlists_extra/parameters_comprehensive.txt" ]]; then
+        cat > wordlists_extra/parameters_comprehensive.txt << 'EOF'
+id
+user
+username
+name
+email
+password
+passwd
+pwd
+token
+key
+api_key
+access_token
+auth_token
+session
+sessionid
+file
+filename
+path
+filepath
+url
+redirect_url
+redirect
+callback
+return_url
+return
+next
+debug
+admin
+test
+search
+query
+q
+s
+page
+limit
+offset
+sort
+order
+filter
+category
+type
+action
+method
+format
+version
+lang
+language
+locale
+EOF
+    fi
+    
+    # Create subdomain wordlist
+    if [[ ! -f "wordlists_extra/subdomains_comprehensive.txt" ]]; then
+        cat > wordlists_extra/subdomains_comprehensive.txt << 'EOF'
+www
+mail
+ftp
+admin
+api
+dev
+test
+staging
+prod
+blog
+shop
+store
+app
+mobile
+m
+secure
+vpn
+remote
+support
+help
+docs
+wiki
+portal
+dashboard
+panel
+cpanel
+webmail
+email
+smtp
+pop
+imap
+ns1
+ns2
+dns
+cdn
+static
+assets
+media
+images
+img
+css
+js
+ajax
+json
+xml
+rss
+forum
+news
+beta
+alpha
+demo
+sandbox
+EOF
+    fi
+    
+    log_success "Enhanced wordlists created"
+}
+
+# Safe wordlist downloading
+download_wordlists_safely() {
+    log_info "Downloading essential external wordlists..."
+    
+    local wordlist_urls=(
+        "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/directory-list-2.3-medium.txt:external_lists/directories_medium.txt"
+        "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt:external_lists/directories_common.txt"
+        "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/subdomains-top1million-5000.txt:external_lists/subdomains_top5k.txt"
+    )
+    
+    for entry in "${wordlist_urls[@]}"; do
+        local url="${entry%:*}"
+        local filename="${entry#*:}"
+        
+        if [[ ! -f "$filename" ]]; then
+            log_info "Downloading $(basename "$filename")..."
+            if timeout 60 curl -s -L -o "$filename" "$url" 2>/dev/null; then
+                if [[ -s "$filename" ]]; then
+                    log_success "✓ Downloaded $(basename "$filename")"
+                else
+                    log_warning "✗ Downloaded file is empty: $(basename "$filename")"
+                    rm -f "$filename"
+                fi
+            else
+                log_warning "✗ Failed to download $(basename "$filename")"
+            fi
+        fi
+    done
+}
+
 # Create a quick test script
 create_test_script() {
     log_info "Creating test script..."
@@ -710,6 +1023,21 @@ main() {
     setup_go_env
     install_go_tools
     install_additional_tools
+    
+    # Enhanced installation features
+    log_info ""
+    log_info "Enhanced Installation Phase"
+    log_info "==========================="
+    
+    # Auto-install missing security tools
+    install_security_tools
+    
+    # Create enhanced wordlists
+    create_enhanced_wordlists
+    
+    # Download external wordlists safely
+    download_wordlists_safely
+    
     create_directories
     create_payloads
     create_test_script
@@ -727,6 +1055,9 @@ main() {
     echo ""
     echo "  3. Run the main script:"
     echo "     python3 bl4ckc3ll_p4nth30n.py"
+    echo ""
+    echo "  4. For missing tools, run with --install flag:"
+    echo "     ./install.sh --install-tools"
     echo ""
     log_info "For troubleshooting, check the generated test_installation.py script"
 }
