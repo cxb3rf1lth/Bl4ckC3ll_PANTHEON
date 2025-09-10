@@ -5918,9 +5918,11 @@ def run_automated_testing_chain():
         print("\n--- Phase 2: Enhanced Reconnaissance ---")
         run_enhanced_recon()
         
-        # Phase 3: Bug Bounty Automation
-        print("\n--- Phase 3: Bug Bounty Automation ---")
-        run_bug_bounty_automation()
+        # Phase 3: Enhanced Bug Bounty Automation
+        print("\n--- Phase 3: Enhanced Bug Bounty Automation ---")
+        rd, env = start_run("auto_chain_bug_bounty")
+        cfg = load_cfg()
+        run_enhanced_bug_bounty_automation(rd, env, cfg)
         
         # Phase 4: Advanced Vulnerability Scanning
         print("\n--- Phase 4: Advanced Vulnerability Scanning ---") 
@@ -6323,6 +6325,9 @@ def main():
         logger.log("[WARNING] Some dependencies missing. Please run install.sh or install manually.", "WARNING")
         logger.log("Continuing with available functionality...", "WARNING")
         time.sleep(2)
+    
+    # Auto-fix missing dependencies and wordlists
+    auto_fix_missing_dependencies()
     
     if not check_and_setup_environment():
         logger.log("Environment setup issues detected. Some features may not work correctly.", "WARNING")
@@ -6923,7 +6928,7 @@ def run_enhanced_subdomain_enumeration(target: str, target_dir: Path, cfg: Dict[
                 result = run_cmd(
                     tool_config["cmd"], 
                     timeout=tool_config["timeout"], 
-                    capture_output=True, 
+                    capture=True, 
                     check_return=False
                 )
                 
@@ -7014,7 +7019,7 @@ def run_enhanced_port_scanning(subdomains: List[str], target_dir: Path, cfg: Dic
             result = run_cmd([
                 "httpx", "-l", str(subdomains_file), "-silent", "-status-code", 
                 "-tech-detect", "-title", "-json"
-            ], timeout=600, capture_output=True, check_return=False)
+            ], timeout=600, capture=True, check_return=False)
             
             if result and result.stdout:
                 for line in result.stdout.splitlines():
@@ -7063,7 +7068,7 @@ def run_enhanced_web_discovery(target: str, target_dir: Path, cfg: Dict[str, Any
             result = run_cmd([
                 "ffuf", "-u", f"http://{target}/FUZZ", "-w", str(wordlist_file),
                 "-mc", "200,204,301,302,307,401,403", "-fs", "0", "-s"
-            ], timeout=300, capture_output=True, check_return=False)
+            ], timeout=300, capture=True, check_return=False)
             
             if result and result.stdout:
                 endpoints = []
@@ -7091,8 +7096,8 @@ def run_enhanced_vulnerability_assessment(target: str, target_dir: Path, cfg: Di
         try:
             result = run_cmd([
                 "nuclei", "-u", f"http://{target}", "-severity", "info,low,medium,high,critical",
-                "-json", "-silent"
-            ], timeout=600, capture_output=True, check_return=False)
+                "-jsonl", "-silent"
+            ], timeout=600, capture=True, check_return=False)
             
             if result and result.stdout:
                 vulnerabilities = []
@@ -7115,6 +7120,43 @@ def run_enhanced_vulnerability_assessment(target: str, target_dir: Path, cfg: Di
             vuln_results["errors"].append(f"nuclei failed: {str(e)}")
     
     return vuln_results
+
+def auto_fix_missing_dependencies():
+    """Automatically fix missing dependencies and wordlists"""
+    try:
+        # Ensure essential directories exist
+        essential_dirs = [EXTRA_DIR, EXT_DIR, MERGED_DIR, PAYLOADS_DIR]
+        for dir_path in essential_dirs:
+            dir_path.mkdir(exist_ok=True)
+        
+        # Create missing wordlists
+        wordlists_to_create = {
+            EXTRA_DIR / "common_directories.txt": [
+                "admin", "api", "app", "backup", "config", "data", "debug", 
+                "dev", "docs", "files", "images", "login", "test", "upload"
+            ],
+            EXTRA_DIR / "common_parameters.txt": [
+                "id", "user", "password", "token", "key", "file", "path", 
+                "url", "redirect", "callback", "search", "query"
+            ],
+            EXTRA_DIR / "common_subdomains.txt": [
+                "www", "mail", "api", "admin", "dev", "test", "staging",
+                "blog", "app", "secure", "portal", "dashboard"
+            ]
+        }
+        
+        for wordlist_path, words in wordlists_to_create.items():
+            if not wordlist_path.exists():
+                with open(wordlist_path, 'w') as f:
+                    f.write('\n'.join(words))
+                logger.log(f"Created missing wordlist: {wordlist_path.name}", "INFO")
+        
+        logger.log("Dependencies auto-fix completed", "SUCCESS")
+        return True
+        
+    except Exception as e:
+        logger.log(f"Auto-fix failed: {e}", "ERROR")
+        return False
 
 def run_advanced_subdomain_takeover(rd, env, cfg):
     """Run advanced subdomain takeover detection and exploitation"""
