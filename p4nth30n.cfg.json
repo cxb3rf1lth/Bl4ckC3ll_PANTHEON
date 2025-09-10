@@ -19,6 +19,34 @@
     "conc": 150,
     "all_templates": true
   },
+  "bcar": {
+    "ct_search": true,
+    "subdomain_enum": true,
+    "takeover_check": true,
+    "port_scan": true,
+    "tech_detection": true,
+    "directory_fuzz": true,
+    "parameter_discovery": true,
+    "max_subdomains": 1000,
+    "threads": 30,
+    "timeout": 10
+  },
+  "payload_injection": {
+    "lhost": "127.0.0.1",
+    "lport": 4444,
+    "test_mode": true,
+    "platforms": ["bash", "python", "php", "powershell", "perl", "ruby"],
+    "meterpreter_enabled": true,
+    "listener_auto_setup": true
+  },
+  "fuzzing": {
+    "directory_wordlist_size": 500,
+    "parameter_wordlist_size": 400,
+    "threads": 30,
+    "timeout": 5,
+    "status_codes": [200, 301, 302, 403, 500],
+    "extensions": ["", ".php", ".asp", ".aspx", ".jsp", ".html", ".txt", ".bak", ".old"]
+  },
   "report": {
     "formats": [
       "html",

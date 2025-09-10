@@ -308,13 +308,16 @@ go install github.com/lc/gau/v2/cmd/gau@latest
 
 ### Quick BCAR Setup
 ```bash
-# 1) Configure targets
+# 1) Run BCAR-specific setup
+./setup_bcar.sh
+
+# 2) Configure targets
 echo "target-domain.com" > targets.txt
 
-# 2) Launch framework
+# 3) Launch framework
 python3 bl4ckc3ll_p4nth30n.py
 
-# 3) Select BCAR options from menu:
+# 4) Select BCAR options from menu:
 #    24. [BCAR] BCAR Enhanced Reconnaissance
 #    25. [TAKEOVER] Advanced Subdomain Takeover  
 #    26. [PAYINJECT] Automated Payload Injection
@@ -353,11 +356,22 @@ python3 bcar.py target.com --ct-only
 python3 bcar.py target.com --takeover-only
 ```
 
+### Comprehensive Documentation
+For detailed BCAR usage, configuration options, and best practices:
+```bash
+# View complete BCAR usage guide
+cat BCAR_USAGE_GUIDE.md
+
+# Run BCAR setup and validation
+./setup_bcar.sh
+```
+
 On first runs, select:
 - Refresh Sources + Merge Wordlists
 - BCAR Enhanced Reconnaissance (option 24)
 - Advanced Subdomain Takeover (option 25)
 - Comprehensive Advanced Fuzzing (option 27)
+- Generate Enhanced Report
 
 ## Menu Overview
 
