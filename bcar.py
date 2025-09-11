@@ -517,6 +517,20 @@ class PantheonBCARIntegration:
         meterpreter_payloads.update(basic_payloads)
         
         return meterpreter_payloads
+    
+    def enhanced_reconnaissance(self, domain: str) -> Dict[str, Any]:
+        """Enhanced reconnaissance with BCAR integration"""
+        recon_config = {
+            'ct_search': True,
+            'subdomain_enum': True, 
+            'takeover_check': True,
+            'port_scan': True,
+            'tech_detection': True,
+            'directory_fuzz': False,  # Skip intensive fuzzing for quick recon
+            'parameter_discovery': False
+        }
+        
+        return self.bcar.run_comprehensive_scan(domain, recon_config)
 
 
 # CLI interface for standalone usage

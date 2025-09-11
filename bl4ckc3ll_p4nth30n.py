@@ -7374,34 +7374,38 @@ def run_enhanced_subdomain_enumeration(target: str, target_dir: Path, cfg: Dict[
     return subdomain_results
 
 def search_certificate_transparency(domain: str) -> List[str]:
-    """Search Certificate Transparency logs for subdomains"""
+    """Search Certificate Transparency logs for subdomains with performance optimization"""
+    try:
+        # Try to use optimized version if available
+        from performance_optimizer import optimize_certificate_transparency_search
+        return optimize_certificate_transparency_search(domain, limit=100)
+    except ImportError:
+        # Fallback to original implementation
+        pass
+    
     subdomains = set()
     
     ct_urls = [
-        f"https://crt.sh/?q=%25.{domain}&output=json",
-        f"https://api.certspotter.com/v1/issuances?domain={domain}&include_subdomains=true&expand=dns_names"
+        f"https://crt.sh/?q=%25.{domain}&output=json"
     ]
     
     for url in ct_urls:
         try:
             import requests
-            response = requests.get(url, timeout=30)
+            response = requests.get(url, timeout=10)  # Reduced timeout
             if response.status_code == 200:
                 data = response.json()
-                if 'crt.sh' in url:
-                    for entry in data[:1000]:  # Limit to prevent excessive results
-                        name_value = entry.get('name_value', '')
-                        for name in name_value.split('\n'):
-                            name = name.strip().lower()
-                            if name and domain in name and not name.startswith('*'):
-                                subdomains.add(name)
-                elif 'certspotter' in url:
-                    for entry in data[:1000]:
-                        dns_names = entry.get('dns_names', [])
-                        for name in dns_names:
-                            name = name.strip().lower()
-                            if name and domain in name and not name.startswith('*'):
-                                subdomains.add(name)
+                # Limit results for performance 
+                for entry in data[:100]:  # Reduced from 1000 to 100
+                    name_value = entry.get('name_value', '')
+                    for name in name_value.split('\n'):
+                        name = name.strip().lower()
+                        if name and domain in name and not name.startswith('*'):
+                            subdomains.add(name)
+                        if len(subdomains) >= 100:  # Cap at 100 results
+                            break
+                    if len(subdomains) >= 100:
+                        break
         except Exception:
             continue
     

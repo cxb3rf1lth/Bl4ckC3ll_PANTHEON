@@ -46,8 +46,13 @@ class ConfigValidator:
         # Security checks
         self._security_validation(validated_config)
         
-        if self.errors:
-            raise ValueError(f"Configuration validation failed: {'; '.join(self.errors)}")
+        # Return validation result with valid flag
+        return {
+            "valid": len(self.errors) == 0,
+            "config": validated_config,
+            "errors": self.errors,
+            "warnings": self.warnings
+        }
             
         if self.warnings:
             print(f"Configuration warnings: {'; '.join(self.warnings)}")

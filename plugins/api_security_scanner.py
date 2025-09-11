@@ -310,8 +310,8 @@ def test_graphql_security(target: str) -> Dict[str, Any]:
                                 if "data" in schema_response:
                                     results["schema_dump"] = schema_response
                             except Exception as e:
-            logging.warning(f"Unexpected error: {e}")
-            # Consider if this error should be handled differently
+                                logging.warning(f"Unexpected error: {e}")
+                                # Consider if this error should be handled differently
                 except json.JSONDecodeError:
                     pass
         

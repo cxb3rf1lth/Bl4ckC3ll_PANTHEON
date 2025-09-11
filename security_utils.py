@@ -440,83 +440,179 @@ class SecureHeaders:
         return result
 
 
+class InputValidator:
+    """Input validation and sanitization class"""
+    
+    @staticmethod
+    def validate_input(input_value: str, max_length: int = 256, 
+                      pattern: Optional[str] = None, 
+                      forbidden_patterns: Optional[List[str]] = None) -> bool:
+        """
+        Validate input against various security criteria
+        
+        Args:
+            input_value: Input to validate
+            max_length: Maximum allowed length
+            pattern: Regex pattern to match (if provided)
+            forbidden_patterns: List of forbidden patterns
+            
+        Returns:
+            True if valid, False otherwise
+        """
+        if not isinstance(input_value, str):
+            return False
+        
+        if len(input_value) > max_length:
+            return False
+        
+        # Check forbidden patterns (security)
+        if forbidden_patterns:
+            for forbidden in forbidden_patterns:
+                if forbidden.lower() in input_value.lower():
+                    return False
+        
+        # Check for common attack patterns (only dangerous ones)
+        dangerous_patterns = [
+            '../', '..\\', '${', '{{', '<script', 'javascript:', 
+            '; drop', "'; drop", 'union select', 'insert into'
+        ]
+        
+        for attack_pattern in dangerous_patterns:
+            if attack_pattern.lower() in input_value.lower():
+                return False
+        
+        # Check pattern match if provided
+        if pattern:
+            import re
+            if not re.match(pattern, input_value):
+                return False
+        
+        return True
+
+
 class RateLimiter:
     """Rate limiting for security testing to avoid overwhelming targets"""
     
-    def __init__(self, requests_per_second: float = 10.0, burst_limit: int = 50):
+    def __init__(self, max_requests: int = 10, time_window: float = 1.0):
         """
         Initialize rate limiter
         
         Args:
-            requests_per_second: Maximum requests per second
-            burst_limit: Maximum burst requests allowed
+            max_requests: Maximum requests allowed in time window
+            time_window: Time window in seconds
         """
         import time
         import collections
         
-        self.rate = requests_per_second
-        self.burst_limit = burst_limit
-        self.tokens = float(burst_limit)
-        self.last_update = time.time()
-        self.request_times = collections.deque(maxlen=1000)
+        self.max_requests = max_requests
+        self.time_window = time_window
+        self.request_times = collections.defaultdict(collections.deque)
+        self.stats = collections.defaultdict(int)
     
-    def acquire(self, tokens: int = 1) -> bool:
+    def is_allowed(self, key: str = "default") -> bool:
         """
-        Acquire tokens from rate limiter
+        Check if request is allowed under rate limit
         
         Args:
-            tokens: Number of tokens to acquire
+            key: Rate limiter key (allows different limits per key)
             
         Returns:
-            True if tokens acquired, False if rate limited
+            True if allowed, False if rate limited
         """
         import time
         
         now = time.time()
+        window_start = now - self.time_window
         
-        # Add tokens based on elapsed time
-        elapsed = now - self.last_update
-        self.tokens = min(self.burst_limit, self.tokens + elapsed * self.rate)
-        self.last_update = now
+        # Clean old requests
+        requests = self.request_times[key]
+        while requests and requests[0] < window_start:
+            requests.popleft()
         
-        if self.tokens >= tokens:
-            self.tokens -= tokens
-            self.request_times.append(now)
+        if len(requests) < self.max_requests:
+            requests.append(now)
+            self.stats[f"{key}_allowed"] += 1
             return True
         
+        self.stats[f"{key}_blocked"] += 1
         return False
     
-    def wait_time(self) -> float:
-        """
-        Calculate wait time before next request can be made
-        
-        Returns:
-            Wait time in seconds
-        """
-        if self.tokens >= 1:
-            return 0.0
-        
-        return (1 - self.tokens) / self.rate
-    
     def get_stats(self) -> Dict[str, Any]:
-        """
-        Get rate limiter statistics
+        """Get rate limiter statistics"""
+        return dict(self.stats)
+
+
+class NetworkValidator:
+    """Network-related validation utilities"""
+    
+    @staticmethod
+    def is_private_ip(ip_str: str) -> bool:
+        """Check if IP address is in private ranges"""
+        try:
+            ip = ipaddress.ip_address(ip_str)
+            return ip.is_private
+        except ValueError:
+            return False
+    
+    @staticmethod
+    def is_valid_domain(domain: str) -> bool:
+        """Validate domain name format"""
+        if not domain or len(domain) > 255:
+            return False
         
-        Returns:
-            Statistics dictionary
-        """
-        import time
-        
-        now = time.time()
-        recent_requests = sum(1 for t in self.request_times if now - t <= 60)
-        
-        return {
-            'current_tokens': self.tokens,
-            'max_tokens': self.burst_limit,
-            'rate_per_second': self.rate,
-            'requests_last_minute': recent_requests,
-            'next_token_in': max(0, self.wait_time())
+        # Basic domain pattern
+        import re
+        domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+        return bool(re.match(domain_pattern, domain))
+    
+    @staticmethod
+    def is_valid_ip(ip_str: str) -> bool:
+        """Validate IP address format"""
+        try:
+            ipaddress.ip_address(ip_str)
+            return True
+        except ValueError:
+            return False
+
+
+class SecurityHeaderAnalyzer:
+    """Analyze HTTP security headers"""
+    
+    SECURITY_HEADERS = {
+        'content-security-policy': {'required': True, 'description': 'Prevents XSS and injection attacks'},
+        'strict-transport-security': {'required': True, 'description': 'Enforces HTTPS connections'},
+        'x-frame-options': {'required': True, 'description': 'Prevents clickjacking attacks'},
+        'x-content-type-options': {'required': True, 'description': 'Prevents MIME sniffing attacks'},
+        'referrer-policy': {'required': False, 'description': 'Controls referrer information'},
+        'permissions-policy': {'required': False, 'description': 'Controls browser features'}
+    }
+    
+    @classmethod
+    def analyze_headers(cls, headers: Dict[str, str]) -> Dict[str, Any]:
+        """Analyze security headers for compliance"""
+        result = {
+            'score': 0,
+            'max_score': 0,
+            'missing_headers': [],
+            'present_headers': [],
+            'recommendations': []
         }
+        
+        headers_lower = {k.lower(): v for k, v in headers.items()}
+        
+        for header_name, config in cls.SECURITY_HEADERS.items():
+            result['max_score'] += 1 if config['required'] else 0.5
+            
+            if header_name in headers_lower:
+                result['present_headers'].append(header_name)
+                result['score'] += 1 if config['required'] else 0.5
+            else:
+                result['missing_headers'].append(header_name)
+        
+        result['percentage'] = (result['score'] / result['max_score'] * 100) if result['max_score'] > 0 else 0
+        return result
+
+
 
 
 def create_security_context(operation: str, target: str) -> Dict[str, Any]:
