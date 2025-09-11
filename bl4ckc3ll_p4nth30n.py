@@ -2189,7 +2189,7 @@ class EnhancedToolFallbackManager:
             return primary_tool
             
         # Try configured alternatives
-        alt_tools = alternatives or ToolFallbackManager.TOOL_ALTERNATIVES.get(primary_tool, [])
+        alt_tools = alternatives or EnhancedToolFallbackManager.TOOL_ALTERNATIVES.get(primary_tool, [])
         
         for alt_tool in alt_tools:
             if which(alt_tool):
@@ -2202,7 +2202,7 @@ class EnhancedToolFallbackManager:
     @staticmethod  
     def install_tool(tool_name: str) -> bool:
         """Attempt to install a missing tool"""
-        install_cmd = ToolFallbackManager.INSTALLATION_COMMANDS.get(tool_name)
+        install_cmd = EnhancedToolFallbackManager.INSTALLATION_COMMANDS.get(tool_name)
         
         if not install_cmd:
             logger.log(f"No installation command available for '{tool_name}'", "WARNING")
