@@ -8,6 +8,7 @@ textual>=6.1.0
 
 # Optional but recommended for enhanced functionality
 requests>=2.32.0
+aiohttp>=3.10.0
 
 # Enhanced scanning and analysis capabilities
 beautifulsoup4>=4.13.0

@@ -27,6 +27,10 @@ class EnhancedValidator:
         """Validate domain name with comprehensive checks"""
         if not domain or not isinstance(domain, str):
             return False
+        
+        # First check if it's an IP address - if so, it's not a valid domain
+        if self.validate_ip_address(domain):
+            return False
             
         # Basic format validation
         domain_pattern = r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'
@@ -303,6 +307,9 @@ class SecurityValidator:
             r'(\b(union|select|insert|delete|update|drop|create|alter)\b)',  # SQL injection
             r'(\.\./){2,}',  # Path traversal
             r'(eval|exec|system|shell_exec|passthru)\s*\(',  # Code injection
+            r'\$\([^)]*\)',  # Command substitution
+            r'\x00',  # Null bytes
+            r'[;&|`]',  # Shell metacharacters
         ]
         
     def sanitize_input(self, value: str, max_length: int = 1000) -> str:
@@ -327,6 +334,39 @@ class SecurityValidator:
         value = value.replace("'", '&#x27;')
         
         return value
+    
+    def is_malicious_input(self, value: str) -> bool:
+        """Check if input contains malicious patterns"""
+        return self.is_suspicious_input(value)
+    
+    def sanitize_command(self, command: str) -> str:
+        """Sanitize command string by removing dangerous characters"""
+        if not isinstance(command, str):
+            return ""
+        
+        # Remove or replace dangerous shell characters
+        dangerous_chars = {
+            ';': ' ',
+            '&': ' ',
+            '|': ' ',
+            '`': '',
+            '$': '',
+            '(': '',
+            ')': '',
+            '{': '',
+            '}': '',
+            '[': '',
+            ']': ''
+        }
+        
+        sanitized = command
+        for char, replacement in dangerous_chars.items():
+            sanitized = sanitized.replace(char, replacement)
+        
+        # Remove multiple spaces
+        sanitized = ' '.join(sanitized.split())
+        
+        return sanitized
     
     def is_suspicious_input(self, value: str) -> bool:
         """Check if input contains suspicious patterns"""
@@ -371,6 +411,39 @@ class EnhancedConfigValidator:
         self.validator = EnhancedValidator()
         self.security = SecurityValidator()
         
+    def validate_config(self, config: Dict[str, Any]) -> bool:
+        """Validate configuration structure and content"""
+        if not isinstance(config, dict):
+            return False
+        
+        # Check for required sections
+        required_sections = ['limits', 'nuclei', 'repos']
+        for section in required_sections:
+            if section not in config:
+                return False
+        
+        # Validate limits section
+        limits = config.get('limits', {})
+        if not isinstance(limits, dict):
+            return False
+        
+        required_limits = ['parallel_jobs', 'http_timeout', 'rps']
+        for limit in required_limits:
+            if limit not in limits or not isinstance(limits[limit], (int, float)):
+                return False
+        
+        # Validate nuclei section
+        nuclei = config.get('nuclei', {})
+        if not isinstance(nuclei, dict):
+            return False
+        
+        # Validate repos section
+        repos = config.get('repos', {})
+        if not isinstance(repos, dict):
+            return False
+        
+        return True
+    
     def validate_scan_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Validate scanning configuration with enhanced checks"""
         validated_config = config.copy()
