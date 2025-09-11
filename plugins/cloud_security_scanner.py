@@ -467,8 +467,8 @@ def scan_container_registries(base_name: str) -> Dict[str, Any]:
                             "public": True
                         })
                 except Exception as e:
-            logging.warning(f"Unexpected error: {e}")
-            # Consider if this error should be handled differently
+                    logging.warning(f"Unexpected error: {e}")
+                    # Consider if this error should be handled differently
         except Exception:
             continue
     
