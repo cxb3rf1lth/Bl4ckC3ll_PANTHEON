@@ -596,4 +596,38 @@ class ErrorRecovery:
         
         if last_exception:
             raise last_exception
+
+# Enhanced recovery strategies
+class AdvancedErrorRecovery:
+    """Advanced error recovery with multiple strategies"""
+    
+    def __init__(self):
+        self.recovery_strategies = {}
+        self.fallback_handlers = {}
+    
+    def register_fallback(self, operation: str, fallback_func: Callable):
+        """Register a fallback function for an operation"""
+        self.fallback_handlers[operation] = fallback_func
+    
+    def safe_execute(self, operation: str, func: Callable, *args, **kwargs):
+        """Execute function with multiple recovery strategies"""
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            enhanced_logger.warning(f"Operation {operation} failed: {str(e)}")
+            
+            # Try fallback if available
+            if operation in self.fallback_handlers:
+                try:
+                    enhanced_logger.info(f"Attempting fallback for {operation}")
+                    return self.fallback_handlers[operation](*args, **kwargs)
+                except Exception as fallback_e:
+                    enhanced_logger.error(f"Fallback for {operation} also failed: {str(fallback_e)}")
+            
+            # Log and re-raise if no fallback available
+            enhanced_logger.error(f"No recovery possible for {operation}")
+            raise
+
+# Global recovery manager instance
+advanced_recovery = AdvancedErrorRecovery()
 circuit_breaker = recovery_manager.circuit_breaker
