@@ -468,17 +468,17 @@ class InputValidator:
         # Check forbidden patterns (security)
         if forbidden_patterns:
             for forbidden in forbidden_patterns:
-                if forbidden in input_value.lower():
+                if forbidden.lower() in input_value.lower():
                     return False
         
-        # Check for common attack patterns
+        # Check for common attack patterns (only dangerous ones)
         dangerous_patterns = [
             '../', '..\\', '${', '{{', '<script', 'javascript:', 
-            'data:', '; drop', "'; drop", 'union select', 'insert into'
+            '; drop', "'; drop", 'union select', 'insert into'
         ]
         
-        for pattern in dangerous_patterns:
-            if pattern in input_value.lower():
+        for attack_pattern in dangerous_patterns:
+            if attack_pattern.lower() in input_value.lower():
                 return False
         
         # Check pattern match if provided

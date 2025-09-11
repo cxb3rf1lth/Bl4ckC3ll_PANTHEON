@@ -90,3 +90,83 @@ backups/*/
 !exploits/.gitkeep
 !backups/.gitkeep
 !runs/.gitkeep
+# Bl4ckC3ll_PANTHEON specific ignores
+*.tmp
+*.temp
+/runs/*
+!/runs/.gitkeep
+/logs/*
+!/logs/.gitkeep
+/backups/*
+!/backups/.gitkeep
+/bcar_results/*
+!/bcar_results/.gitkeep
+
+# Test artifacts
+/tmp/*
+test_*.tmp
+*_test_output.*
+comprehensive_test_report.json
+production_validation_report.json
+
+# Sensitive data
+*.key
+*.pem
+*.p12
+*.pfx
+config.local.json
+.env
+.env.local
+
+# System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Testing
+.tox/
+.coverage
+htmlcov/
+.pytest_cache/
+.cache
+
+# Security tools output
+nuclei_results/
+nmap_results/
+scan_results/
+target_output/
