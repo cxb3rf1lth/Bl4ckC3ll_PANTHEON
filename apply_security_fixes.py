@@ -183,6 +183,14 @@ def validate_domain_input(domain: str) -> bool:
     """Validate domain name for security."""
     if not isinstance(domain, str) or len(domain) > 255:
         return False
+    
+    # Check if it's an IP address - if so, it's not a valid domain
+    try:
+        ipaddress.ip_address(domain)
+        return False  # IP addresses are not domain names
+    except ValueError:
+        pass  # Not an IP address, continue with domain validation
+    
     domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?)*$'
     return bool(re.match(domain_pattern, domain))
 

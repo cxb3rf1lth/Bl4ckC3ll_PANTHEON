@@ -27,6 +27,10 @@ class EnhancedValidator:
         """Validate domain name with comprehensive checks"""
         if not domain or not isinstance(domain, str):
             return False
+        
+        # First check if it's an IP address - if so, it's not a valid domain
+        if self.validate_ip_address(domain):
+            return False
             
         # Basic format validation
         domain_pattern = r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'

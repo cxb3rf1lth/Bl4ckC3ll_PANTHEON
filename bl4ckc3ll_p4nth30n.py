@@ -39,6 +39,14 @@ def validate_domain_input(domain: str) -> bool:
     """Validate domain name for security."""
     if not isinstance(domain, str) or len(domain) > 255:
         return False
+    
+    # Check if it's an IP address - if so, it's not a valid domain
+    try:
+        ipaddress.ip_address(domain)
+        return False  # IP addresses are not domain names
+    except ValueError:
+        pass  # Not an IP address, continue with domain validation
+    
     domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
     return bool(re.match(domain_pattern, domain))
 
@@ -7378,10 +7386,15 @@ def search_certificate_transparency(domain: str) -> List[str]:
     try:
         # Try to use optimized version if available
         from performance_optimizer import optimize_certificate_transparency_search
-        return optimize_certificate_transparency_search(domain, limit=100)
+        result = optimize_certificate_transparency_search(f"%25.{domain}", limit=100)
+        if result:
+            return result
     except ImportError:
         # Fallback to original implementation
         pass
+    except Exception as e:
+        # Log the error but continue with fallback
+        print(f"Certificate transparency search failed: {e}")
     
     subdomains = set()
     
@@ -7392,7 +7405,7 @@ def search_certificate_transparency(domain: str) -> List[str]:
     for url in ct_urls:
         try:
             import requests
-            response = requests.get(url, timeout=10)  # Reduced timeout
+            response = requests.get(url, timeout=15)  # Increased timeout
             if response.status_code == 200:
                 data = response.json()
                 # Limit results for performance 
@@ -7406,7 +7419,8 @@ def search_certificate_transparency(domain: str) -> List[str]:
                             break
                     if len(subdomains) >= 100:
                         break
-        except Exception:
+        except Exception as e:
+            print(f"Certificate transparency search failed for {url}: {e}")
             continue
     
     return list(subdomains)
