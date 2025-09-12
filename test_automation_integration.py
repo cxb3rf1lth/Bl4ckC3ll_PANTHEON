@@ -37,6 +37,7 @@ def test_eslint_integration():
         assert Path(config).exists(), f"Missing ESLint config: {config}"
 
     print("✓ ESLint integration configuration validated")
+    return True
 
 
 def test_bug_bounty_script():
@@ -50,7 +51,7 @@ def test_bug_bounty_script():
     assert os.access(script_path, os.X_OK), "bug_bounty_commands.sh is not executable"
 
     # Test script syntax
-    result = subprocess.run(["bash", "-n", str(script_path, timeout=300)], capture_output=True, text=True)
+    result = subprocess.run(["bash", "-n", str(script_path)], capture_output=True, text=True, timeout=300)
 
     assert result.returncode == 0, f"Script syntax error: {result.stderr}"
 
@@ -64,6 +65,7 @@ def test_bug_bounty_script():
         assert func in content, f"Missing function: {func}"
 
     print("✓ Bug bounty script validated")
+    return True
 
 
 def test_enhanced_application_features():
@@ -87,9 +89,10 @@ def test_enhanced_application_features():
         ]
 
         for func_name in required_functions:
-            assert hasattr(main, func_name), "✗ Missing function: {func_name}"
+            assert hasattr(main, func_name), f"✗ Missing function: {func_name}"
 
         print("✓ Test passed")
+        return True
 
     except Exception as e:
         pytest.fail(f"Test failed: {e}")
@@ -118,9 +121,10 @@ def test_github_workflow_integration():
         ]
 
         for element in required_elements:
-            assert not (element not in workflow_content), "✗ Missing workflow element: {element}"
+            assert element in workflow_content, f"✗ Missing workflow element: {element}"
 
         print("✓ Test passed")
+        return True
 
     except Exception as e:
         pytest.fail(f"Test failed: {e}")
@@ -153,9 +157,10 @@ def test_automation_chain_integration():
         ]
 
         for file_path in critical_files:
-            assert Path(file_path).exists(), "✗ Critical file missing: {file_path}"
+            assert Path(file_path).exists(), f"✗ Critical file missing: {file_path}"
 
         print("✓ Test passed")
+        return True
 
     except Exception as e:
         pytest.fail(f"Test failed: {e}")
@@ -174,12 +179,12 @@ def test_security_and_compliance():
 
             # Verify security plugin is configured
             plugins = config.get("plugins", [])
-            assert not ("security" not in plugins), "✗ ESLint security plugin not configured"
+            assert "security" in plugins, "✗ ESLint security plugin not configured"
 
             # Check for security rules
             rules = config.get("rules", {})
             security_rules = [rule for rule in rules.keys() if rule.startswith("security/")]
-            assert not (len(security_rules) < 5), "✗ Insufficient security rules configured"
+            assert len(security_rules) >= 5, "✗ Insufficient security rules configured"
 
         # Check bug bounty script security
         bug_bounty_script = Path("bug_bounty_commands.sh")
@@ -195,6 +200,7 @@ def test_security_and_compliance():
                 print("⚠ Bug bounty script missing timeout controls")
 
         print("✓ Test passed")
+        return True
 
     except Exception as e:
         pytest.fail(f"Test failed: {e}")
