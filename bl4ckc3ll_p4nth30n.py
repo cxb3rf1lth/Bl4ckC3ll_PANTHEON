@@ -1256,6 +1256,103 @@ def safe_http_request(url: str, method: str = 'GET', timeout: int = 10,
         logger.log(f"Unexpected error making request to {url}: {e}", "ERROR")
         return {'success': False, 'error': 'unexpected_error', 'message': str(e)}
 
+
+# ---------- Performance Monitoring System ----------
+
+class PerformanceMonitor:
+    """Advanced performance monitoring and optimization system"""
+    
+    def __init__(self, max_history: int = 100):
+        self.max_history = max_history
+        self.metrics_history = []
+        self.start_time = time.time()
+        self.monitoring = False
+        self.monitor_thread = None
+        
+    def start_monitoring(self):
+        """Start performance monitoring in background"""
+        if not self.monitoring and HAS_PSUTIL:
+            self.monitoring = True
+            self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
+            self.monitor_thread.start()
+            logger.log("Performance monitoring started", "INFO")
+    
+    def stop_monitoring(self):
+        """Stop performance monitoring"""
+        self.monitoring = False
+        if self.monitor_thread:
+            self.monitor_thread.join(timeout=1)
+            logger.log("Performance monitoring stopped", "INFO")
+    
+    def _monitor_loop(self):
+        """Main monitoring loop"""
+        import psutil
+        while self.monitoring:
+            try:
+                metrics = {
+                    'timestamp': datetime.now().isoformat(),
+                    'cpu_percent': psutil.cpu_percent(interval=0.1),
+                    'memory_percent': psutil.virtual_memory().percent,
+                    'disk_percent': psutil.disk_usage('/').percent,
+                    'uptime_seconds': time.time() - self.start_time
+                }
+                self.metrics_history.append(metrics)
+                if len(self.metrics_history) > self.max_history:
+                    self.metrics_history.pop(0)
+                time.sleep(5)  # Collect metrics every 5 seconds
+            except Exception:
+                pass  # Continue monitoring even if errors occur
+    
+    def get_current_metrics(self):
+        """Get the most recent metrics"""
+        return self.metrics_history[-1] if self.metrics_history else None
+    
+    def should_throttle_operations(self) -> bool:
+        """Check if operations should be throttled based on current resources"""
+        current = self.get_current_metrics()
+        if not current:
+            return False
+        
+        cpu_high = current.get('cpu_percent', 0) > 85
+        memory_high = current.get('memory_percent', 0) > 85
+        
+        return cpu_high or memory_high
+    
+    def get_optimal_threads(self) -> int:
+        """Calculate optimal number of threads based on current system load"""
+        if not HAS_PSUTIL:
+            return 2  # Safe default
+        
+        import psutil
+        current = self.get_current_metrics()
+        base_threads = psutil.cpu_count() or 2
+        
+        if not current:
+            return max(1, base_threads // 2)
+        
+        cpu_percent = current.get('cpu_percent', 0)
+        memory_percent = current.get('memory_percent', 0)
+        
+        # Reduce threads based on system load
+        if cpu_percent > 80 or memory_percent > 80:
+            return max(1, base_threads // 4)
+        elif cpu_percent > 60 or memory_percent > 60:
+            return max(1, base_threads // 2)
+        else:
+            return base_threads
+
+
+# Check if psutil is available for performance monitoring
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+
+# Global performance monitor
+GLOBAL_PERFORMANCE_MONITOR = PerformanceMonitor()
+
+
 # ---------- Preset Scan Configurations ----------
 
 class ScanPresets:
