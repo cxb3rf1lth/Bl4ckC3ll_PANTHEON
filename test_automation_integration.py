@@ -50,7 +50,7 @@ def test_bug_bounty_script():
     assert os.access(script_path, os.X_OK), "bug_bounty_commands.sh is not executable"
 
     # Test script syntax
-    result = subprocess.run(["bash", "-n", str(script_path)], capture_output=True, text=True, timeout=10)
+    result = subprocess.run(["bash", "-n", str(script_path, timeout=300)], capture_output=True, text=True)
 
     assert result.returncode == 0, f"Script syntax error: {result.stderr}"
 

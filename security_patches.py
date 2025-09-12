@@ -62,7 +62,7 @@ class SecureCommandExecutor:
                 timeout=timeout,
                 shell=False,  # CRITICAL: Never use shell=True
                 check=False
-            )
+            , timeout=300)
             return result
         except subprocess.TimeoutExpired:
             logging.error(f"Command timed out after {timeout}s: {command}")

@@ -18,6 +18,7 @@ import shutil
 import uuid
 import threading
 import webbrowser
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
@@ -30,10 +31,131 @@ try:
     BCAR_AVAILABLE = True
 except ImportError:
     BCAR_AVAILABLE = False
+
+# Rate limiting for security
+import time
+from collections import defaultdict
+from threading import Lock
+
+class RateLimiter:
+    """Thread-safe rate limiter for security"""
+    
+    def __init__(self, max_requests: int = 60, time_window: int = 60):
+        self.max_requests = max_requests
+        self.time_window = time_window
+        self.requests = defaultdict(list)
+        self.lock = Lock()
+    
+    def is_allowed(self, identifier: str) -> bool:
+        """Check if request is allowed under rate limit"""
+        current_time = time.time()
+        
+        with self.lock:
+            # Clean old requests
+            self.requests[identifier] = [
+                req_time for req_time in self.requests[identifier]
+                if current_time - req_time < self.time_window
+            ]
+            
+            # Check if under limit
+            if len(self.requests[identifier]) < self.max_requests:
+                self.requests[identifier].append(current_time)
+                return True
+            
+            return False
+    
+    def wait_time(self, identifier: str) -> float:
+        """Get wait time until next request is allowed"""
+        current_time = time.time()
+        
+        with self.lock:
+            if not self.requests[identifier]:
+                return 0.0
+            
+            oldest_request = min(self.requests[identifier])
+            wait_time = self.time_window - (current_time - oldest_request)
+            return max(0.0, wait_time)
+
+# Global rate limiter instance
+rate_limiter = RateLimiter()
+
+
 # SECURITY: Input validation imports
 import re
 import ipaddress
 from urllib.parse import urlparse
+
+
+# Enhanced input validation for security
+def validate_command_args(args: List[str]) -> bool:
+    """Validate command arguments for security"""
+    if not isinstance(args, list):
+        return False
+    
+    dangerous_patterns = [
+        r'[;&|`$()]',  # Command injection
+        r'\.\./|\.\.\\',  # Path traversal
+        r'<script|javascript:|data:',  # XSS
+        r'union\s+select|drop\s+table',  # SQL injection
+        r'(rm|del|format)\s+',  # Destructive commands
+    ]
+    
+    for arg in args:
+        if not isinstance(arg, str):
+            continue
+        if len(arg) > 1000:  # Prevent buffer overflow
+            return False
+        for pattern in dangerous_patterns:
+            if re.search(pattern, arg, re.IGNORECASE):
+                logging.getLogger('security').warning(f"Dangerous pattern detected: {pattern} in {arg[:50]}")
+                return False
+    
+    return True
+
+
+def sanitize_filename(filename: str) -> str:
+    """Sanitize filename for security"""
+    if not isinstance(filename, str):
+        return "invalid_filename"
+    
+    # Remove path traversal attempts
+    filename = re.sub(r'\.\.[\/]', '', filename)
+    
+    # Remove special characters
+    filename = re.sub(r'[<>:"|?*]', '_', filename)
+    
+    # Limit length
+    filename = filename[:255]
+    
+    # Ensure not empty
+    if not filename.strip():
+        filename = "unnamed_file"
+    
+    return filename
+
+
+def validate_network_address(address: str) -> bool:
+    """Validate network address for security"""
+    if not isinstance(address, str) or len(address) > 253:
+        return False
+    
+    # Block private/localhost addresses in production
+    blocked_patterns = [
+        r'^127\.',  # Localhost
+        r'^192\.168\.',  # Private
+        r'^10\.',  # Private
+        r'^172\.(1[6-9]|2[0-9]|3[01])\.',  # Private
+        r'^169\.254\.',  # Link-local
+        r'^0\.',  # Invalid
+    ]
+    
+    for pattern in blocked_patterns:
+        if re.match(pattern, address):
+            logging.getLogger('security').warning(f"Blocked private/localhost address: {address}")
+            return False
+    
+    return True
+
 
 def validate_domain_input(domain: str) -> bool:
     """Validate domain name for security."""
@@ -63,7 +185,7 @@ def validate_url_input(url: str) -> bool:
     try:
         parsed = urlparse(url)
         return parsed.scheme in ['http', 'https'] and bool(parsed.netloc)
-    except:
+    except (ValueError, TypeError):
         return False
 
 
@@ -478,9 +600,19 @@ def safe_file_operation(operation, path, *args, **kwargs):
     except OSError as e:
         logger.log(f"OS error accessing {path}: {e}", "ERROR")
         return None
-    except Exception as e:
-        logger.log(f"Unexpected error with {path}: {e}", "ERROR")
-        return None
+
+
+def safe_run_command(cmd, timeout=300, **kwargs):
+    """Safely run command with standardized error handling"""
+    return safe_execute(
+        run_cmd,
+        cmd,
+        timeout=timeout,
+        default=None,
+        error_msg=f"Command execution failed: {cmd}",
+        log_level="ERROR",
+        **kwargs
+    )
 
 def validate_input(value: str, validators: Dict[str, Any] = None, field_name: str = "input") -> bool:
     """Enhanced input validation with security considerations"""
@@ -1075,7 +1207,7 @@ class EnhancedPayloadManager:
                         logger.log(f"Downloaded payload: {filename}", "SUCCESS")
                         continue
                     
-                    result = subprocess.run(cmd, capture_output=True, timeout=30)
+                    result = subprocess.run(cmd, capture_output=True, timeout=300)
                     if result.returncode == 0:
                         success_count += 1
                         logger.log(f"Downloaded payload: {filename}", "SUCCESS")
@@ -1860,6 +1992,11 @@ def write_uniq(path: Path, items: List[str]) -> bool:
             out.append(x)
     return atomic_write(path, "\n".join(out) + ("\n" if out else ""))
 
+
+def write_lines(path: Path, items: List[str]) -> bool:
+    """Write lines to file"""
+    return atomic_write(path, "\n".join(items) + ("\n" if items else ""))
+
 def os_kind() -> str:
     s = platform.system().lower()
     if s == "darwin":
@@ -1895,7 +2032,7 @@ def run_cmd(cmd,
         try:
             p = subprocess.run(
                 args,
-                cwd=str(cwd) if cwd else None,
+                cwd=str(cwd, timeout=300) if cwd else None,
                 env=env,
                 text=True,
                 capture_output=capture,
@@ -2245,20 +2382,20 @@ class EnhancedToolFallbackManager:
         # Try auto-installation if requested
         if auto_install:
             logger.log(f"Attempting auto-installation of '{tool_name}'...", "INFO")
-            if ToolFallbackManager.install_tool(tool_name):
+            if EnhancedToolFallbackManager.install_tool(tool_name):
                 return tool_name
         
         # Try alternatives
-        available_tool = ToolFallbackManager.get_available_tool(tool_name)
+        available_tool = EnhancedToolFallbackManager.get_available_tool(tool_name)
         if available_tool:
             return available_tool
         
         # If auto-install enabled, try installing alternatives
         if auto_install:
-            alternatives = ToolFallbackManager.TOOL_ALTERNATIVES.get(tool_name, [])
+            alternatives = EnhancedToolFallbackManager.TOOL_ALTERNATIVES.get(tool_name, [])
             for alt_tool in alternatives:
                 logger.log(f"Attempting to install alternative '{alt_tool}'...", "INFO")
-                if ToolFallbackManager.install_tool(alt_tool):
+                if EnhancedToolFallbackManager.install_tool(alt_tool):
                     return alt_tool
         
         return None
@@ -2268,16 +2405,16 @@ class EnhancedToolFallbackManager:
         """Get comprehensive status of all tools"""
         status = {}
         
-        all_tools = set(ToolFallbackManager.TOOL_ALTERNATIVES.keys())
-        for alternatives in ToolFallbackManager.TOOL_ALTERNATIVES.values():
+        all_tools = set(EnhancedToolFallbackManager.TOOL_ALTERNATIVES.keys())
+        for alternatives in EnhancedToolFallbackManager.TOOL_ALTERNATIVES.values():
             all_tools.update(alternatives)
         
         for tool in sorted(all_tools):
             status[tool] = {
                 "available": which(tool),
-                "alternatives": ToolFallbackManager.TOOL_ALTERNATIVES.get(tool, []),
-                "available_alternatives": [alt for alt in ToolFallbackManager.TOOL_ALTERNATIVES.get(tool, []) if which(alt)],
-                "installable": tool in ToolFallbackManager.INSTALLATION_COMMANDS
+                "alternatives": EnhancedToolFallbackManager.TOOL_ALTERNATIVES.get(tool, []),
+                "available_alternatives": [alt for alt in EnhancedToolFallbackManager.TOOL_ALTERNATIVES.get(tool, []) if which(alt)],
+                "installable": tool in EnhancedToolFallbackManager.INSTALLATION_COMMANDS
             }
         
         return status
@@ -2285,7 +2422,7 @@ class EnhancedToolFallbackManager:
     @staticmethod
     def run_with_fallback(primary_tool: str, command_args: List[str], alternatives: List[str] = None, **kwargs) -> Optional[subprocess.CompletedProcess]:
         """Run command with automatic fallback to alternative tools"""
-        available_tool = ToolFallbackManager.ensure_tool_available(primary_tool)
+        available_tool = EnhancedToolFallbackManager.ensure_tool_available(primary_tool)
         
         if not available_tool:
             logger.log(f"No available tool found for '{primary_tool}'", "ERROR")
@@ -2296,7 +2433,7 @@ class EnhancedToolFallbackManager:
         
         try:
             logger.log(f"Running: {' '.join(full_command[:3])}...", "INFO")
-            result = subprocess.run(full_command, **kwargs)
+            result = subprocess.run(full_command, **kwargs, timeout=300)
             return result
         except Exception as e:
             logger.log(f"Failed to run {available_tool}: {e}", "ERROR")
@@ -2305,7 +2442,7 @@ class EnhancedToolFallbackManager:
 # Update which function to use the fallback manager
 def get_best_available_tool(tool_name: str) -> Optional[str]:
     """Get the best available tool including fallbacks"""
-    return ToolFallbackManager.ensure_tool_available(tool_name)
+    return EnhancedToolFallbackManager.ensure_tool_available(tool_name)
 
 # ---------- Dependency validation ----------
 def _check_python_version() -> bool:
@@ -6147,6 +6284,60 @@ def run_vuln():
     finally:
         cleanup_resource_monitor(stop_event, th)
 
+
+def run_advanced_vuln_scan():
+    """Run advanced vulnerability scanning with enhanced detection"""
+    try:
+        logger.log("Starting advanced vulnerability scanning...", "INFO")
+        cfg = load_cfg()
+        env = env_with_lists()
+        rd = new_run()
+        
+        # Use existing vulnerability scanning infrastructure
+        stage_vuln_scan(rd, env, cfg)
+        
+        # Run ML-based analysis if available
+        scan_results_dir = rd / "vulnerabilities"
+        ml_report_file = rd / "ml_analysis.json"
+        if scan_results_dir.exists():
+            run_ml_vulnerability_analysis(scan_results_dir, ml_report_file, cfg)
+        
+        logger.log("Advanced vulnerability scanning completed", "SUCCESS")
+        
+    except Exception as e:
+        logger.log(f"Advanced vulnerability scanning failed: {e}", "ERROR")
+
+
+def generate_enhanced_report():
+    """Generate enhanced comprehensive report"""
+    try:
+        logger.log("Generating enhanced report...", "INFO")
+        cfg = load_cfg()
+        env = env_with_lists()
+        
+        # Get latest run directory
+        runs = sorted([d for d in RUNS_DIR.iterdir() if d.is_dir()], 
+                     key=lambda p: p.stat().st_mtime, reverse=True)
+        if not runs:
+            logger.log("No runs found for reporting", "WARNING")
+            return
+            
+        rd = runs[0]
+        stage_report(rd, env, cfg)
+        
+        logger.log("Enhanced report generated successfully", "SUCCESS")
+        
+        # Open report if available
+        html_report = rd / "report" / "report.html"
+        if html_report.exists():
+            try:
+                webbrowser.open(f"file://{html_report.absolute()}")
+            except Exception:
+                logger.log(f"Report saved to: {html_report}", "INFO")
+        
+    except Exception as e:
+        logger.log(f"Enhanced report generation failed: {e}", "ERROR")
+
 def run_report_for_latest():
     cfg = load_cfg()
     env = env_with_lists()
@@ -6841,7 +7032,7 @@ def launch_advanced_tui():
         # Launch the TUI in a subprocess
         tui_script = HERE / "tui_launcher.py"
         if tui_script.exists():
-            subprocess.run([sys.executable, str(tui_script)])
+            subprocess.run([sys.executable, str(tui_script, timeout=300)])
         else:
             logger.log("TUI launcher not found. Using fallback import method.", "WARNING")
             
@@ -6993,7 +7184,7 @@ def show_comprehensive_tool_status():
     """Show comprehensive tool status"""
     print(f"\n\033[92m🔧 Comprehensive Tool Status:\033[0m")
     
-    status = ToolFallbackManager.get_tool_status()
+    status = EnhancedToolFallbackManager.get_tool_status()
     categories = {
         "Subdomain Discovery": ["subfinder", "amass", "assetfinder", "findomain"],
         "Port Scanning": ["nmap", "masscan", "naabu", "rustscan"],
@@ -7027,7 +7218,7 @@ def test_tool_availability():
     test_tools = ["subfinder", "nmap", "httpx", "nuclei", "gobuster", "ffuf", "sqlmap"]
     
     for tool in test_tools:
-        available_tool = ToolFallbackManager.ensure_tool_available(tool)
+        available_tool = EnhancedToolFallbackManager.ensure_tool_available(tool)
         if available_tool:
             if available_tool == tool:
                 print(f"  ✅ {tool} - Available")
@@ -7040,7 +7231,7 @@ def install_missing_tools_menu():
     """Menu for installing missing tools"""
     print(f"\n\033[93m🔧 Install Missing Tools:\033[0m")
     
-    status = ToolFallbackManager.get_tool_status()
+    status = EnhancedToolFallbackManager.get_tool_status()
     missing_tools = [tool for tool, info in status.items() 
                     if not info["available"] and info["installable"]]
     
@@ -7063,7 +7254,7 @@ def install_missing_tools_menu():
             if 1 <= choice_num <= len(missing_tools):
                 tool_name = missing_tools[choice_num - 1]
                 logger.log(f"Installing {tool_name}...", "INFO")
-                if ToolFallbackManager.install_tool(tool_name):
+                if EnhancedToolFallbackManager.install_tool(tool_name):
                     logger.log(f"✅ {tool_name} installed successfully", "SUCCESS")
                 else:
                     logger.log(f"❌ Failed to install {tool_name}", "ERROR")
@@ -7072,7 +7263,7 @@ def install_missing_tools_menu():
                 logger.log("Installing all missing tools...", "INFO")
                 success_count = 0
                 for tool in missing_tools:
-                    if ToolFallbackManager.install_tool(tool):
+                    if EnhancedToolFallbackManager.install_tool(tool):
                         success_count += 1
                 logger.log(f"✅ Installed {success_count}/{len(missing_tools)} tools", "INFO")
                 
@@ -7083,7 +7274,7 @@ def show_tool_alternatives():
     """Show available alternatives for each tool"""
     print(f"\n\033[92m🔄 Tool Alternatives:\033[0m")
     
-    for primary_tool, alternatives in ToolFallbackManager.TOOL_ALTERNATIVES.items():
+    for primary_tool, alternatives in EnhancedToolFallbackManager.TOOL_ALTERNATIVES.items():
         available_alts = [alt for alt in alternatives if which(alt)]
         status = "✅" if which(primary_tool) else "❌"
         
@@ -7133,7 +7324,7 @@ def create_tool_status_report():
     print(f"\n\033[93m📊 Creating Tool Status Report...\033[0m")
     
     report_file = HERE / "tool_status_report.json"
-    status = ToolFallbackManager.get_tool_status()
+    status = EnhancedToolFallbackManager.get_tool_status()
     
     # Add system information
     import platform

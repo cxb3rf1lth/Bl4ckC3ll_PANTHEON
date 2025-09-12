@@ -546,17 +546,6 @@ vuln_scan() {
         
         # Combine nuclei results with deduplication
         if [[ $nuclei_success -gt 0 ]]; then
-        if timeout 1200 "$nuclei_tool" -list "${targets_file}" \
-           -o "${output_dir}/nuclei_tech_specific.txt" \
-           -tags tech -silent -stats -rate-limit 75 -c 25; then
-            ((nuclei_success++))
-            success "Nuclei technology-specific scan completed"
-        else
-            warning "Nuclei technology-specific scan failed"
-        fi
-        
-        # Combine nuclei results
-        if [[ $nuclei_success -gt 0 ]]; then
             cat "${output_dir}"/nuclei_*.txt 2>/dev/null | sort -u > "${output_dir}/nuclei_all_results.txt"
             local vuln_count=$(wc -l < "${output_dir}/nuclei_all_results.txt" 2>/dev/null || echo "0")
             success "Nuclei found ${vuln_count} total vulnerabilities"
