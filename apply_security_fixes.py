@@ -95,7 +95,7 @@ def fix_weak_cryptography():
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-        except:
+        except (FileNotFoundError, PermissionError, UnicodeDecodeError, OSError):
             continue
 
         original_content = content
@@ -134,7 +134,7 @@ def improve_error_handling():
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-        except:
+        except (FileNotFoundError, PermissionError, UnicodeDecodeError, OSError):
             continue
 
         original_content = content
@@ -150,7 +150,7 @@ def improve_error_handling():
             content = re.sub(pattern1, replacement1, content)
             fixes_applied += 1
 
-        # Pattern: except: pass (bare except)
+        # Pattern: except (FileNotFoundError, PermissionError, UnicodeDecodeError, OSError): pass (bare except)
         pattern2 = r"except\s*:\s*\n\s*pass\s*\n"
         replacement2 = """except Exception as e:
             logging.warning(f"Unexpected error: {e}")
@@ -207,7 +207,7 @@ def validate_url_input(url: str) -> bool:
     try:
         parsed = urlparse(url)
         return parsed.scheme in ['http', 'https'] and bool(parsed.netloc)
-    except:
+    except (FileNotFoundError, PermissionError, UnicodeDecodeError, OSError):
         return False
 '''
 
