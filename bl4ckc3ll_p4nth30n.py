@@ -5654,7 +5654,17 @@ def extract_key_findings(vuln_results: Dict[str, Any]) -> List[str]:
     findings = []
 
     for target, data in vuln_results.items():
+        # Safety check: ensure data is a dictionary
+        if not isinstance(data, dict):
+            logger.log(f"Warning: data for target {target} is not a dictionary, skipping", "DEBUG")
+            continue
+            
         nuclei_parsed = data.get("nuclei_parsed", {})
+        
+        # Safety check: ensure nuclei_parsed is a dictionary
+        if not isinstance(nuclei_parsed, dict):
+            logger.log(f"Warning: nuclei_parsed for target {target} is not a dictionary, skipping", "DEBUG")
+            continue
 
         # Critical findings
         if nuclei_parsed.get("critical"):
@@ -5683,8 +5693,21 @@ def generate_csv_report(report_data: Dict[str, Any], report_dir: Path):
         writer.writerow(['Target', 'Vulnerability', 'Severity', 'Description', 'Template'])
 
         for target, data in report_data["vuln_scan_results"].items():
+            # Safety check: ensure data is a dictionary
+            if not isinstance(data, dict):
+                logger.log(f"Warning: data for target {target} is not a dictionary, skipping", "DEBUG")
+                continue
+                
             nuclei_parsed = data.get("nuclei_parsed", {})
+            
+            # Safety check: ensure nuclei_parsed is a dictionary
+            if not isinstance(nuclei_parsed, dict):
+                logger.log(f"Warning: nuclei_parsed for target {target} is not a dictionary, skipping", "DEBUG")
+                continue
+                
             for severity, findings in nuclei_parsed.items():
+                if not isinstance(findings, (list, tuple)):
+                    continue
                 for finding in findings:
                     info = finding.get("info", {})
                     writer.writerow([
@@ -5713,8 +5736,21 @@ def generate_sarif_report(report_data: Dict[str, Any], report_dir: Path):
     }
 
     for target, data in report_data["vuln_scan_results"].items():
+        # Safety check: ensure data is a dictionary
+        if not isinstance(data, dict):
+            logger.log(f"Warning: data for target {target} is not a dictionary, skipping", "DEBUG")
+            continue
+            
         nuclei_parsed = data.get("nuclei_parsed", {})
+        
+        # Safety check: ensure nuclei_parsed is a dictionary
+        if not isinstance(nuclei_parsed, dict):
+            logger.log(f"Warning: nuclei_parsed for target {target} is not a dictionary, skipping", "DEBUG")
+            continue
+            
         for severity, findings in nuclei_parsed.items():
+            if not isinstance(findings, (list, tuple)):
+                continue
             for finding in findings:
                 info = finding.get("info", {})
                 result = {
@@ -5787,14 +5823,25 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
     def html_vuln() -> str:
         chunks: List[str] = []
         for target, data in report_data["vuln_scan_results"].items():
+            # Safety check: ensure data is a dictionary
+            if not isinstance(data, dict):
+                logger.log(f"Warning: data for target {target} is not a dictionary, skipping", "DEBUG")
+                continue
+                
             nuclei_parsed = data.get("nuclei_parsed", {})
+            
+            # Safety check: ensure nuclei_parsed is a dictionary
+            if not isinstance(nuclei_parsed, dict):
+                logger.log(f"Warning: nuclei_parsed for target {target} is not a dictionary, skipping", "DEBUG")
+                continue
+                
             risk_score = data.get("risk_score", 0)
 
             # Vulnerability summary
             vuln_summary = ""
-            total_vulns = sum(len(findings) for findings in nuclei_parsed.values())
+            total_vulns = sum(len(findings) for findings in nuclei_parsed.values() if isinstance(findings, (list, tuple)))
             if total_vulns > 0:
-                vuln_summary = """
+                vuln_summary = f"""
                 <div class="vuln-summary">
                   <h4>[REPORT] Vulnerability Summary</h4>
                   <div class="severity-grid">

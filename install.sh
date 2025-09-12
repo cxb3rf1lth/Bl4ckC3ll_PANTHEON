@@ -61,20 +61,166 @@ check_python() {
     fi
 }
 
+# Detect operating system
+detect_os() {
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        OS_ID="$ID"
+        OS_VERSION="$VERSION_ID"
+        OS_LIKE="$ID_LIKE"
+        
+        case "$OS_ID" in
+            "kali")
+                OS_TYPE="kali"
+                PACKAGE_MANAGER="apt"
+                log_info "Detected Kali Linux"
+                ;;
+            "arch")
+                OS_TYPE="arch"
+                PACKAGE_MANAGER="pacman"
+                log_info "Detected Arch Linux"
+                ;;
+            "ubuntu"|"debian")
+                OS_TYPE="debian"
+                PACKAGE_MANAGER="apt"
+                log_info "Detected $OS_ID Linux"
+                ;;
+            *)
+                if [[ "$OS_LIKE" == *"debian"* ]] || [[ "$OS_LIKE" == *"ubuntu"* ]]; then
+                    OS_TYPE="debian"
+                    PACKAGE_MANAGER="apt"
+                    log_info "Detected Debian-based system"
+                elif [[ "$OS_LIKE" == *"arch"* ]]; then
+                    OS_TYPE="arch"
+                    PACKAGE_MANAGER="pacman"
+                    log_info "Detected Arch-based system"
+                else
+                    OS_TYPE="unknown"
+                    PACKAGE_MANAGER="unknown"
+                    log_warning "Unknown OS detected: $OS_ID"
+                fi
+                ;;
+        esac
+    else
+        OS_TYPE="unknown"
+        PACKAGE_MANAGER="unknown"
+        log_warning "Could not detect operating system"
+    fi
+}
+
+# Check if environment is externally managed (PEP 668)
+is_externally_managed() {
+    python3 -c "import sys; exit(0 if hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix else 1)" 2>/dev/null
+    if [[ $? -eq 0 ]]; then
+        return 1  # In virtual environment
+    fi
+    
+    # Check for EXTERNALLY-MANAGED file
+    local python_path=$(python3 -c "import sys; print(sys.prefix)")
+    if [[ -f "$python_path/EXTERNALLY-MANAGED" ]] || [[ -f "$python_path/lib/python*/site-packages/EXTERNALLY-MANAGED" ]]; then
+        return 0  # Externally managed
+    fi
+    
+    return 1  # Not externally managed
+}
+
+# Install system packages via package manager
+install_system_packages() {
+    log_info "Installing system packages for Python dependencies..."
+    
+    case "$PACKAGE_MANAGER" in
+        "apt")
+            sudo apt update -qq
+            local packages=("python3-pip" "python3-dev" "python3-psutil" "python3-distro" "python3-requests")
+            for pkg in "${packages[@]}"; do
+                if ! dpkg -l | grep -q "^ii  $pkg "; then
+                    log_info "Installing $pkg..."
+                    sudo apt install -y "$pkg" &>/dev/null || log_warning "Failed to install $pkg"
+                else
+                    log_info "✓ $pkg already installed"
+                fi
+            done
+            ;;
+        "pacman")
+            sudo pacman -Sy --noconfirm
+            local packages=("python-pip" "python-psutil" "python-distro" "python-requests")
+            for pkg in "${packages[@]}"; do
+                if ! pacman -Q "$pkg" &>/dev/null; then
+                    log_info "Installing $pkg..."
+                    sudo pacman -S --noconfirm "$pkg" &>/dev/null || log_warning "Failed to install $pkg"
+                else
+                    log_info "✓ $pkg already installed"
+                fi
+            done
+            ;;
+        *)
+            log_warning "Unknown package manager, attempting pip installation with fallbacks"
+            ;;
+    esac
+}
+
 # Upgrade pip and install Python dependencies
 install_python_deps() {
     log_info "Installing Python dependencies..."
     
+    # Detect OS first
+    detect_os
+    
+    # Try system packages first for known distributions
+    if [[ "$PACKAGE_MANAGER" != "unknown" ]]; then
+        install_system_packages
+    fi
+    
+    # Check if environment is externally managed
+    local pip_flags=""
+    if is_externally_managed; then
+        log_warning "Detected externally managed Python environment"
+        if [[ "$OS_TYPE" == "kali" ]]; then
+            log_info "Using --break-system-packages for Kali Linux"
+            pip_flags="--break-system-packages"
+        else
+            log_info "Creating virtual environment..."
+            if ! command -v python3-venv &>/dev/null; then
+                case "$PACKAGE_MANAGER" in
+                    "apt") sudo apt install -y python3-venv ;;
+                    "pacman") sudo pacman -S --noconfirm python-virtualenv ;;
+                esac
+            fi
+            
+            # Create and activate virtual environment
+            if ! [[ -d "venv" ]]; then
+                python3 -m venv venv
+                log_success "Virtual environment created"
+            fi
+            
+            # Source virtual environment
+            source venv/bin/activate
+            log_info "Activated virtual environment"
+        fi
+    fi
+    
     # Upgrade pip
-    python3 -m pip install --upgrade pip --user
+    python3 -m pip install --upgrade pip --user $pip_flags 2>/dev/null || \
+    python3 -m pip install --upgrade pip $pip_flags
     
     # Install requirements
     if [[ -f "requirements.txt" ]]; then
-        python3 -m pip install -r requirements.txt --user
+        if [[ -n "$pip_flags" ]]; then
+            python3 -m pip install -r requirements.txt $pip_flags
+        else
+            python3 -m pip install -r requirements.txt --user
+        fi
         log_success "Python dependencies installed"
     else
         log_warning "requirements.txt not found, installing basic dependencies"
-        python3 -m pip install psutil distro requests --user
+        local basic_deps=("psutil" "distro" "requests")
+        for dep in "${basic_deps[@]}"; do
+            if [[ -n "$pip_flags" ]]; then
+                python3 -m pip install "$dep" $pip_flags 2>/dev/null || true
+            else
+                python3 -m pip install "$dep" --user 2>/dev/null || true
+            fi
+        done
     fi
 }
 
