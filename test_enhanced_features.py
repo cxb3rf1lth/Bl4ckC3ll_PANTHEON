@@ -214,7 +214,7 @@ def test_plugin_functionality():
                 missing_plugins.append(plugin)
             else:
                 # Test plugin syntax
-                result = subprocess.run([sys.executable, "-m", "py_compile", str(plugin_file)], capture_output=True)
+                result = subprocess.run([sys.executable, "-m", "py_compile", str(plugin_file, timeout=300)], capture_output=True)
                 if result.returncode == 0:
                     print(f"✓ Plugin syntax valid: {plugin}")
                 else:

@@ -31,10 +31,131 @@ try:
     BCAR_AVAILABLE = True
 except ImportError:
     BCAR_AVAILABLE = False
+
+# Rate limiting for security
+import time
+from collections import defaultdict
+from threading import Lock
+
+class RateLimiter:
+    """Thread-safe rate limiter for security"""
+    
+    def __init__(self, max_requests: int = 60, time_window: int = 60):
+        self.max_requests = max_requests
+        self.time_window = time_window
+        self.requests = defaultdict(list)
+        self.lock = Lock()
+    
+    def is_allowed(self, identifier: str) -> bool:
+        """Check if request is allowed under rate limit"""
+        current_time = time.time()
+        
+        with self.lock:
+            # Clean old requests
+            self.requests[identifier] = [
+                req_time for req_time in self.requests[identifier]
+                if current_time - req_time < self.time_window
+            ]
+            
+            # Check if under limit
+            if len(self.requests[identifier]) < self.max_requests:
+                self.requests[identifier].append(current_time)
+                return True
+            
+            return False
+    
+    def wait_time(self, identifier: str) -> float:
+        """Get wait time until next request is allowed"""
+        current_time = time.time()
+        
+        with self.lock:
+            if not self.requests[identifier]:
+                return 0.0
+            
+            oldest_request = min(self.requests[identifier])
+            wait_time = self.time_window - (current_time - oldest_request)
+            return max(0.0, wait_time)
+
+# Global rate limiter instance
+rate_limiter = RateLimiter()
+
+
 # SECURITY: Input validation imports
 import re
 import ipaddress
 from urllib.parse import urlparse
+
+
+# Enhanced input validation for security
+def validate_command_args(args: List[str]) -> bool:
+    """Validate command arguments for security"""
+    if not isinstance(args, list):
+        return False
+    
+    dangerous_patterns = [
+        r'[;&|`$()]',  # Command injection
+        r'\.\./|\.\.\\',  # Path traversal
+        r'<script|javascript:|data:',  # XSS
+        r'union\s+select|drop\s+table',  # SQL injection
+        r'(rm|del|format)\s+',  # Destructive commands
+    ]
+    
+    for arg in args:
+        if not isinstance(arg, str):
+            continue
+        if len(arg) > 1000:  # Prevent buffer overflow
+            return False
+        for pattern in dangerous_patterns:
+            if re.search(pattern, arg, re.IGNORECASE):
+                logging.getLogger('security').warning(f"Dangerous pattern detected: {pattern} in {arg[:50]}")
+                return False
+    
+    return True
+
+
+def sanitize_filename(filename: str) -> str:
+    """Sanitize filename for security"""
+    if not isinstance(filename, str):
+        return "invalid_filename"
+    
+    # Remove path traversal attempts
+    filename = re.sub(r'\.\.[\/]', '', filename)
+    
+    # Remove special characters
+    filename = re.sub(r'[<>:"|?*]', '_', filename)
+    
+    # Limit length
+    filename = filename[:255]
+    
+    # Ensure not empty
+    if not filename.strip():
+        filename = "unnamed_file"
+    
+    return filename
+
+
+def validate_network_address(address: str) -> bool:
+    """Validate network address for security"""
+    if not isinstance(address, str) or len(address) > 253:
+        return False
+    
+    # Block private/localhost addresses in production
+    blocked_patterns = [
+        r'^127\.',  # Localhost
+        r'^192\.168\.',  # Private
+        r'^10\.',  # Private
+        r'^172\.(1[6-9]|2[0-9]|3[01])\.',  # Private
+        r'^169\.254\.',  # Link-local
+        r'^0\.',  # Invalid
+    ]
+    
+    for pattern in blocked_patterns:
+        if re.match(pattern, address):
+            logging.getLogger('security').warning(f"Blocked private/localhost address: {address}")
+            return False
+    
+    return True
+
 
 def validate_domain_input(domain: str) -> bool:
     """Validate domain name for security."""
@@ -64,7 +185,7 @@ def validate_url_input(url: str) -> bool:
     try:
         parsed = urlparse(url)
         return parsed.scheme in ['http', 'https'] and bool(parsed.netloc)
-    except:
+    except (ValueError, TypeError):
         return False
 
 
@@ -1086,7 +1207,7 @@ class EnhancedPayloadManager:
                         logger.log(f"Downloaded payload: {filename}", "SUCCESS")
                         continue
                     
-                    result = subprocess.run(cmd, capture_output=True, timeout=30)
+                    result = subprocess.run(cmd, capture_output=True, timeout=300)
                     if result.returncode == 0:
                         success_count += 1
                         logger.log(f"Downloaded payload: {filename}", "SUCCESS")
@@ -1911,7 +2032,7 @@ def run_cmd(cmd,
         try:
             p = subprocess.run(
                 args,
-                cwd=str(cwd) if cwd else None,
+                cwd=str(cwd, timeout=300) if cwd else None,
                 env=env,
                 text=True,
                 capture_output=capture,
@@ -2205,7 +2326,7 @@ class EnhancedToolFallbackManager:
             return primary_tool
             
         # Try configured alternatives
-        alt_tools = alternatives or EnhancedEnhancedToolFallbackManager.TOOL_ALTERNATIVES.get(primary_tool, [])
+        alt_tools = alternatives or EnhancedToolFallbackManager.TOOL_ALTERNATIVES.get(primary_tool, [])
         
         for alt_tool in alt_tools:
             if which(alt_tool):
@@ -2218,7 +2339,7 @@ class EnhancedToolFallbackManager:
     @staticmethod  
     def install_tool(tool_name: str) -> bool:
         """Attempt to install a missing tool"""
-        install_cmd = EnhancedEnhancedToolFallbackManager.INSTALLATION_COMMANDS.get(tool_name)
+        install_cmd = EnhancedToolFallbackManager.INSTALLATION_COMMANDS.get(tool_name)
         
         if not install_cmd:
             logger.log(f"No installation command available for '{tool_name}'", "WARNING")
@@ -2312,7 +2433,7 @@ class EnhancedToolFallbackManager:
         
         try:
             logger.log(f"Running: {' '.join(full_command[:3])}...", "INFO")
-            result = subprocess.run(full_command, **kwargs)
+            result = subprocess.run(full_command, **kwargs, timeout=300)
             return result
         except Exception as e:
             logger.log(f"Failed to run {available_tool}: {e}", "ERROR")
@@ -6911,7 +7032,7 @@ def launch_advanced_tui():
         # Launch the TUI in a subprocess
         tui_script = HERE / "tui_launcher.py"
         if tui_script.exists():
-            subprocess.run([sys.executable, str(tui_script)])
+            subprocess.run([sys.executable, str(tui_script, timeout=300)])
         else:
             logger.log("TUI launcher not found. Using fallback import method.", "WARNING")
             

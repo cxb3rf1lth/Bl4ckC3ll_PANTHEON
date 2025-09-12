@@ -599,8 +599,8 @@ def atomic_write(file_path: Path, content: str, encoding: str = "utf-8") -> bool
         try:
             if 'temp_name' in locals():
                 Path(temp_name).unlink(missing_ok=True)
-        except:
-            pass
+        except Exception as e:
+                logging.warning(f"Unexpected error: {e}")
         return False
 
 

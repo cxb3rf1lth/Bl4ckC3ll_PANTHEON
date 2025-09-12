@@ -253,8 +253,8 @@ class PantheonLogger:
                 file_handler = logging.FileHandler(log_file)
                 file_handler.setFormatter(console_formatter)
                 self.logger.addHandler(file_handler)
-            except Exception:
-                pass  # Continue without file logging if not possible
+            except Exception as e:
+                logging.warning(f"Operation failed: {e}")  # Continue without file logging if not possible
     
     def info(self, message: str):
         """Log info message"""
@@ -358,8 +358,8 @@ class BCARCore:
                     socket.gethostbyname(full_domain)
                     found_subs.add(full_domain)
                     return full_domain
-            except:
-                pass
+            except Exception as e:
+                logging.warning(f"Unexpected error: {e}")
             return None
         
         # Multi-threaded subdomain checking
@@ -411,8 +411,8 @@ class BCARCore:
                                 'status_code': response.status_code,
                                 'confidence': 'high'
                             }
-            except:
-                pass
+            except Exception as e:
+                logging.warning(f"Unexpected error: {e}")
             return None
         
         # Check subdomains for takeover vulnerabilities

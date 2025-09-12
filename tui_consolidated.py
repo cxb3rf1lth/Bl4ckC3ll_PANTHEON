@@ -358,8 +358,8 @@ class SystemDashboard(Static):
             self.query_one("#memory-bar").progress = self.memory_usage
             self.query_one("#disk-bar").progress = self.disk_usage
             
-        except Exception:
-            pass
+        except Exception as e:
+                logging.warning(f"Operation failed: {e}")
 
 
 class ReportViewer(Static):

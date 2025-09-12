@@ -47,7 +47,7 @@ def fix_command_injection_vulnerabilities():
                 cmd_args = {cmd_arg}
             subprocess.run(cmd_args, shell=False"""
 
-            content = content.replace(old_call, new_call)
+            content = content.replace(old_call, new_call, timeout=300)
             fixes_applied += 1
 
         # Pattern 2: subprocess.Popen with shell=True

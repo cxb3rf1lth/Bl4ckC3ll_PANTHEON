@@ -185,8 +185,8 @@ class ComprehensiveTestSuite:
                 for i in range(5):
                     try:
                         circuit_test()
-                    except:
-                        pass
+                    except Exception as e:
+                        logging.warning(f"Unexpected error: {e}")
                 self.log_test("Circuit Breaker", "PASS", "Circuit opened after failures")
             except Exception as e:
                 self.log_test("Circuit Breaker", "FAIL", str(e))
