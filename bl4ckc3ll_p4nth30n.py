@@ -19,6 +19,7 @@ import uuid
 import threading
 import webbrowser
 import logging
+import argparse
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
@@ -541,8 +542,31 @@ class Logger:
         self.log_file = LOG_DIR / "bl4ckc3ll_p4nth30n.log"
         self.console_lock = threading.Lock()
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
+        self.current_level = "INFO"
+        self.level_hierarchy = {
+            "DEBUG": 0,
+            "INFO": 1,
+            "WARNING": 2,
+            "ERROR": 3,
+            "SUCCESS": 1
+        }
+
+    def set_level(self, level: str):
+        """Set the minimum logging level"""
+        if level in self.level_hierarchy:
+            self.current_level = level
+
+    def should_log(self, level: str) -> bool:
+        """Check if message should be logged based on current level"""
+        current_priority = self.level_hierarchy.get(self.current_level, 1)
+        message_priority = self.level_hierarchy.get(level, 1)
+        return message_priority >= current_priority
 
     def log(self, message: str, level: str = "INFO"):
+        # Only log if level meets threshold
+        if not self.should_log(level):
+            return
+            
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_message = f"{timestamp} - {level} - {message}"
         with self.console_lock:
@@ -6099,6 +6123,10 @@ def clear_all_targets():
     input("Press Enter to continue...")
 
 # Supporting functions for enhanced target management
+def validate_target(target: str) -> bool:
+    """Validate a single target (domain or IP)"""
+    return validate_target_input(target) and validate_single_target(target)
+
 def validate_target_input(target: str) -> bool:
     """Validate target input format"""
     if not target or len(target) > 200:
@@ -6918,110 +6946,644 @@ def run_cicd_integration_mode():
     
     input("Press Enter to continue...")
 
+def setup_argument_parser() -> argparse.ArgumentParser:
+    """Setup comprehensive command-line argument parser"""
+    parser = argparse.ArgumentParser(
+        description="Bl4ckC3ll_PANTHEON - Advanced Security Testing Framework",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s -t example.com --recon                 # Run reconnaissance on example.com
+  %(prog)s -t example.com --vuln --full          # Run full vulnerability scan
+  %(prog)s -t targets.txt --batch --output json  # Batch scan with JSON output
+  %(prog)s --interactive                          # Launch interactive menu (default)
+  %(prog)s --preset fast -t example.com          # Run fast preset scan
+  %(prog)s --bcar -t example.com                 # Run BCAR enhanced reconnaissance
+  
+Scan Types:
+  --recon                   Enhanced reconnaissance scan
+  --vuln                    Advanced vulnerability assessment  
+  --full                    Complete pipeline (recon + vuln + report)
+  --bcar                    BCAR enhanced reconnaissance
+  --takeover                Subdomain takeover detection
+  --fuzz                    Comprehensive fuzzing
+  --payload-inject          Automated payload injection
+  
+Configuration:
+  --config FILE             Use custom configuration file
+  --preset PRESET           Use scan preset (fast, deep, stealth, aggressive)
+  --threads N               Number of threads (default: auto)
+  --timeout N               Scan timeout in seconds
+  --rate-limit N            Rate limit requests per second
+  
+Output Options:
+  --output FORMAT           Output format: json, xml, html, txt (default: txt)
+  --outfile FILE            Save results to file
+  --quiet                   Minimal output
+  --verbose                 Detailed output
+  --debug                   Debug mode with extensive logging
+        """
+    )
+
+    # Main options
+    parser.add_argument('-t', '--target', type=str, 
+                       help='Target domain/IP or file containing targets')
+    parser.add_argument('--targets-file', type=str,
+                       help='File containing list of targets (one per line)')
+    parser.add_argument('--batch', action='store_true',
+                       help='Batch mode - non-interactive execution')
+    parser.add_argument('--interactive', action='store_true',
+                       help='Launch interactive menu interface (default)')
+
+    # Scan types
+    scan_group = parser.add_argument_group('Scan Types')
+    scan_group.add_argument('--recon', action='store_true',
+                           help='Run enhanced reconnaissance scan')
+    scan_group.add_argument('--vuln', action='store_true',
+                           help='Run advanced vulnerability assessment')
+    scan_group.add_argument('--full', action='store_true',
+                           help='Run complete pipeline (recon + vuln + report)')
+    scan_group.add_argument('--bcar', action='store_true',
+                           help='Run BCAR enhanced reconnaissance')
+    scan_group.add_argument('--takeover', action='store_true',
+                           help='Run subdomain takeover detection')
+    scan_group.add_argument('--fuzz', action='store_true',
+                           help='Run comprehensive fuzzing')
+    scan_group.add_argument('--payload-inject', action='store_true',
+                           help='Run automated payload injection')
+    scan_group.add_argument('--preset', choices=['fast', 'deep', 'stealth', 'aggressive'],
+                           help='Use predefined scan preset')
+
+    # Configuration
+    config_group = parser.add_argument_group('Configuration')
+    config_group.add_argument('--config', type=str,
+                             help='Path to custom configuration file')
+    config_group.add_argument('--threads', type=int, default=0,
+                             help='Number of threads (0 = auto)')
+    config_group.add_argument('--timeout', type=int, default=600,
+                             help='Scan timeout in seconds')
+    config_group.add_argument('--rate-limit', type=int, default=50,
+                             help='Rate limit (requests per second)')
+    config_group.add_argument('--depth', type=int, default=3,
+                             help='Scanning depth level (1-5)')
+
+    # Output options
+    output_group = parser.add_argument_group('Output Options')
+    output_group.add_argument('--output', choices=['json', 'xml', 'html', 'txt'], 
+                             default='txt', help='Output format')
+    output_group.add_argument('--outfile', type=str,
+                             help='Save results to specified file')
+    output_group.add_argument('--quiet', '-q', action='store_true',
+                             help='Minimal output')
+    output_group.add_argument('--verbose', '-v', action='store_true',
+                             help='Verbose output')
+    output_group.add_argument('--debug', action='store_true',
+                             help='Debug mode with extensive logging')
+
+    # Advanced options
+    advanced_group = parser.add_argument_group('Advanced Options')
+    advanced_group.add_argument('--wordlist', type=str,
+                               help='Custom wordlist file')
+    advanced_group.add_argument('--payloads', type=str,
+                               help='Custom payloads file')
+    advanced_group.add_argument('--exclude', type=str,
+                               help='Exclude patterns (comma-separated)')
+    advanced_group.add_argument('--include-only', type=str,
+                               help='Include only patterns (comma-separated)')
+    advanced_group.add_argument('--user-agent', type=str,
+                               help='Custom User-Agent string')
+    advanced_group.add_argument('--proxy', type=str,
+                               help='Proxy URL (http://host:port)')
+
+    # Tool management
+    tools_group = parser.add_argument_group('Tool Management')
+    tools_group.add_argument('--install-tools', action='store_true',
+                            help='Install missing security tools')
+    tools_group.add_argument('--check-tools', action='store_true',
+                            help='Check tool availability and exit')
+    tools_group.add_argument('--update-wordlists', action='store_true',
+                            help='Update wordlists and exit')
+
+    return parser
+
+def handle_cli_execution(args):
+    """Handle command-line execution based on parsed arguments"""
+    try:
+        # Setup logging based on verbosity
+        if args.debug:
+            logger.set_level("DEBUG")
+        elif args.verbose:
+            logger.set_level("INFO")
+        elif args.quiet:
+            logger.set_level("ERROR")
+
+        # Handle tool management commands
+        if args.check_tools:
+            validate_dependencies()
+            return 0
+        
+        if args.install_tools:
+            logger.log("Installing missing tools...", "INFO")
+            install_script = HERE / "install.sh"
+            if install_script.exists():
+                run_cmd([str(install_script)], timeout=1800)
+            return 0
+        
+        if args.update_wordlists:
+            logger.log("Updating wordlists...", "INFO")
+            refresh_and_merge()
+            return 0
+
+        # Validate targets
+        targets = []
+        if args.target:
+            if Path(args.target).exists():
+                # It's a file
+                with open(args.target, 'r') as f:
+                    targets = [line.strip() for line in f if line.strip()]
+            else:
+                # It's a single target
+                targets = [args.target]
+        elif args.targets_file:
+            with open(args.targets_file, 'r') as f:
+                targets = [line.strip() for line in f if line.strip()]
+
+        if not targets:
+            logger.log("No targets specified. Use -t or --targets-file", "ERROR")
+            return 1
+
+        # Validate targets
+        validated_targets = []
+        for target in targets:
+            if validate_target(target):
+                validated_targets.append(target)
+            else:
+                logger.log(f"Invalid target: {target}", "WARNING")
+
+        if not validated_targets:
+            logger.log("No valid targets found", "ERROR")
+            return 1
+
+        # Load configuration
+        cfg = load_cfg()
+        if args.config:
+            try:
+                with open(args.config, 'r') as f:
+                    custom_cfg = json.load(f)
+                cfg.update(custom_cfg)
+            except Exception as e:
+                logger.log(f"Failed to load config file: {e}", "ERROR")
+                return 1
+
+        # Apply CLI arguments to configuration
+        if args.threads > 0:
+            cfg['threads'] = args.threads
+        if args.timeout:
+            cfg['timeout'] = args.timeout
+        if args.rate_limit:
+            cfg['rate_limit'] = args.rate_limit
+        if args.depth:
+            cfg['scan_depth'] = args.depth
+        if args.wordlist:
+            cfg['custom_wordlist'] = args.wordlist
+        if args.payloads:
+            cfg['custom_payloads'] = args.payloads
+        if args.user_agent:
+            cfg['user_agent'] = args.user_agent
+        if args.proxy:
+            cfg['proxy'] = args.proxy
+
+        # Initialize run
+        scan_name = "cli_batch_scan" if args.batch else "cli_scan"
+        rd, env = start_run(scan_name)
+
+        # Store targets
+        rd.targets = validated_targets
+        targets_file = rd.run_dir / "targets.txt"
+        with open(targets_file, 'w') as f:
+            f.write('\n'.join(validated_targets))
+
+        results = {}
+
+        # Execute scans based on arguments
+        if args.preset:
+            results.update(run_preset_scan_cli(args.preset, rd, env, cfg))
+        elif args.full:
+            results.update(run_full_pipeline_cli(rd, env, cfg))
+        elif args.bcar:
+            results.update(run_bcar_enhanced_reconnaissance(rd, env, cfg))
+        elif args.takeover:
+            results.update(run_advanced_subdomain_takeover(rd, env, cfg))
+        elif args.fuzz:
+            results.update(run_comprehensive_fuzzing(rd, env, cfg))
+        elif args.payload_inject:
+            results.update(run_automated_payload_injection(rd, env, cfg))
+        elif args.recon and args.vuln:
+            # Both recon and vuln
+            results.update(run_full_pipeline_cli(rd, env, cfg))
+        elif args.recon:
+            results.update(run_recon_cli(rd, env, cfg))
+        elif args.vuln:
+            results.update(run_vuln_cli(rd, env, cfg))
+        else:
+            # Default to reconnaissance
+            results.update(run_recon_cli(rd, env, cfg))
+
+        # Generate output
+        if args.outfile:
+            save_results_to_file(results, args.outfile, args.output)
+        else:
+            display_results(results, args.output, args.quiet)
+
+        logger.log("CLI execution completed successfully", "SUCCESS")
+        return 0
+
+    except KeyboardInterrupt:
+        logger.log("Interrupted by user", "INFO")
+        return 130
+    except Exception as e:
+        logger.log(f"CLI execution failed: {e}", "ERROR")
+        return 1
+
 # ---------- Main ----------
 def main():
+    # Setup argument parser
+    parser = setup_argument_parser()
+    
+    # If no arguments provided, run interactive mode
+    if len(sys.argv) == 1:
+        sys.argv.append('--interactive')
+    
+    # Parse arguments
+    try:
+        args = parser.parse_args()
+    except SystemExit as e:
+        return e.code
+
     ensure_layout()
     
     # Create initial backup of dependencies
     backup_dependencies()
     
-    print(BANNER)
-    print(f"\033[91m{APP} v{VERSION}-ENHANCED\033[0m by {AUTHOR}")
-    print(f"\033[93m[SECURITY] Advanced Security Testing Framework with Enhanced Capabilities\033[0m")
+    # Non-interactive header for CLI mode
+    if not args.interactive:
+        print(BANNER)
+        print(f"\033[91m{APP} v{VERSION}-ENHANCED\033[0m by {AUTHOR}")
+        print(f"\033[93m[SECURITY] Advanced Security Testing Framework - CLI Mode\033[0m")
     
     # Validate dependencies and environment
     if not validate_dependencies():
-        logger.log("[WARNING] Some dependencies missing. Please run install.sh or install manually.", "WARNING")
-        logger.log("Continuing with available functionality...", "WARNING")
-        time.sleep(2)
+        if not args.quiet:
+            logger.log("[WARNING] Some dependencies missing. Please run install.sh or install manually.", "WARNING")
+            logger.log("Continuing with available functionality...", "WARNING")
+            time.sleep(1)
     
     # Auto-fix missing dependencies and wordlists
     auto_fix_missing_dependencies()
     
     if not check_and_setup_environment():
-        logger.log("Environment setup issues detected. Some features may not work correctly.", "WARNING")
-        time.sleep(1)
+        if not args.quiet:
+            logger.log("Environment setup issues detected. Some features may not work correctly.", "WARNING")
     
-    while True:
-        display_menu()
-        c = get_choice()
-        if c == 1:
-            manage_targets()
-        elif c == 2:
-            refresh_and_merge()
-        elif c == 3:
-            run_recon()
-        elif c == 4:
-            run_vuln()
-        elif c == 5:
-            run_full_pipeline()
-        elif c == 6:
-            run_preset_scan_menu()
-        elif c == 7:
-            run_report_for_latest()
-        elif c == 8:
-            settings_menu()
-        elif c == 9:
-            plugins_menu()
-        elif c == 10:
-            view_last_report()
-        elif c == 11:
-            network_tools_menu()
-        elif c == 12:
-            security_assessment_summary()
-        elif c == 13:
-            run_ai_vulnerability_analysis()
-        elif c == 14:
-            run_cloud_security_assessment()
-        elif c == 15:
-            run_api_security_testing()
-        elif c == 16:
-            run_compliance_assessment()
-        elif c == 17:
-            run_cicd_integration_mode()
-        elif c == 18:
-            run_eslint_security_check()
-        elif c == 19:
-            # Enhanced Bug Bounty Automation
-            rd, env = start_run("enhanced_bug_bounty")
-            cfg = load_cfg()
-            run_enhanced_bug_bounty_automation(rd, env, cfg)
-            input("Press Enter to continue...")
-        elif c == 20:
-            run_automated_testing_chain()
-        elif c == 21:
-            launch_advanced_tui()
-        elif c == 22:
-            enhanced_payload_management_menu()
-        elif c == 23:
-            tool_status_management_menu()
-        elif c == 24:
-            # BCAR Enhanced Reconnaissance
-            rd, env = start_run("bcar_reconnaissance")
-            cfg = load_cfg()
-            run_bcar_enhanced_reconnaissance(rd, env, cfg)
-            input("Press Enter to continue...")
-        elif c == 25:
-            # Advanced Subdomain Takeover
-            rd, env = start_run("subdomain_takeover")
-            cfg = load_cfg()
-            run_advanced_subdomain_takeover(rd, env, cfg)
-            input("Press Enter to continue...")
-        elif c == 26:
-            # Automated Payload Injection
-            rd, env = start_run("payload_injection")
-            cfg = load_cfg()
-            run_automated_payload_injection(rd, env, cfg)
-            input("Press Enter to continue...")
-        elif c == 27:
-            # Comprehensive Advanced Fuzzing
-            rd, env = start_run("comprehensive_fuzzing")
-            cfg = load_cfg()
-            run_comprehensive_fuzzing(rd, env, cfg)
-            input("Press Enter to continue...")
-        elif c == 28:
-            logger.log("Goodbye! Stay secure!", "INFO")
-            break
+    # Handle CLI execution or interactive mode
+    if args.interactive:
+        # Original interactive menu system
+        print(BANNER)
+        print(f"\033[91m{APP} v{VERSION}-ENHANCED\033[0m by {AUTHOR}")
+        print(f"\033[93m[SECURITY] Advanced Security Testing Framework with Enhanced Capabilities\033[0m")
+        
+        while True:
+            display_menu()
+            c = get_choice()
+            if c == 1:
+                manage_targets()
+            elif c == 2:
+                refresh_and_merge()
+            elif c == 3:
+                run_recon()
+            elif c == 4:
+                run_vuln()
+            elif c == 5:
+                run_full_pipeline()
+            elif c == 6:
+                run_preset_scan_menu()
+            elif c == 7:
+                run_report_for_latest()
+            elif c == 8:
+                settings_menu()
+            elif c == 9:
+                plugins_menu()
+            elif c == 10:
+                view_last_report()
+            elif c == 11:
+                network_tools_menu()
+            elif c == 12:
+                security_assessment_summary()
+            elif c == 13:
+                run_ai_vulnerability_analysis()
+            elif c == 14:
+                run_cloud_security_assessment()
+            elif c == 15:
+                run_api_security_testing()
+            elif c == 16:
+                run_compliance_assessment()
+            elif c == 17:
+                run_cicd_integration_mode()
+            elif c == 18:
+                run_eslint_security_check()
+            elif c == 19:
+                # Enhanced Bug Bounty Automation
+                rd, env = start_run("enhanced_bug_bounty")
+                cfg = load_cfg()
+                run_enhanced_bug_bounty_automation(rd, env, cfg)
+                input("Press Enter to continue...")
+            elif c == 20:
+                run_automated_testing_chain()
+            elif c == 21:
+                launch_advanced_tui()
+            elif c == 22:
+                enhanced_payload_management_menu()
+            elif c == 23:
+                tool_status_management_menu()
+            elif c == 24:
+                # BCAR Enhanced Reconnaissance
+                rd, env = start_run("bcar_reconnaissance")
+                cfg = load_cfg()
+                run_bcar_enhanced_reconnaissance(rd, env, cfg)
+                input("Press Enter to continue...")
+            elif c == 25:
+                # Advanced Subdomain Takeover
+                rd, env = start_run("subdomain_takeover")
+                cfg = load_cfg()
+                run_advanced_subdomain_takeover(rd, env, cfg)
+                input("Press Enter to continue...")
+            elif c == 26:
+                # Automated Payload Injection
+                rd, env = start_run("payload_injection")
+                cfg = load_cfg()
+                run_automated_payload_injection(rd, env, cfg)
+                input("Press Enter to continue...")
+            elif c == 27:
+                # Comprehensive Advanced Fuzzing
+                rd, env = start_run("comprehensive_fuzzing")
+                cfg = load_cfg()
+                run_comprehensive_fuzzing(rd, env, cfg)
+                input("Press Enter to continue...")
+            elif c == 28:
+                logger.log("Goodbye! Stay secure!", "INFO")
+                break
+    else:
+        # CLI mode execution
+        return handle_cli_execution(args)
+
+def run_preset_scan_cli(preset: str, rd, env: Dict[str, str], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Run preset scan in CLI mode"""
+    logger.log(f"Running {preset} preset scan...", "INFO")
+    results = {"preset": preset, "scans": {}}
+    
+    preset_configs = {
+        'fast': {'scan_depth': 1, 'timeout': 300, 'tools': ['subfinder', 'httpx', 'nuclei']},
+        'deep': {'scan_depth': 4, 'timeout': 1800, 'tools': ['all']},
+        'stealth': {'scan_depth': 2, 'timeout': 900, 'rate_limit': 5},
+        'aggressive': {'scan_depth': 5, 'timeout': 3600, 'rate_limit': 100}
+    }
+    
+    # Apply preset configuration
+    preset_cfg = preset_configs.get(preset, preset_configs['fast'])
+    cfg.update(preset_cfg)
+    
+    # Run reconnaissance
+    if preset in ['fast', 'deep', 'aggressive']:
+        results['scans']['recon'] = run_recon_cli(rd, env, cfg)
+    
+    # Run vulnerability scan
+    if preset in ['deep', 'aggressive']:
+        results['scans']['vuln'] = run_vuln_cli(rd, env, cfg)
+    
+    return results
+
+def run_full_pipeline_cli(rd, env: Dict[str, str], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Run full pipeline in CLI mode"""
+    logger.log("Running full pipeline (recon + vuln + report)...", "INFO")
+    results = {"pipeline": "full", "scans": {}}
+    
+    # Run reconnaissance
+    results['scans']['recon'] = run_recon_cli(rd, env, cfg)
+    
+    # Run vulnerability assessment
+    results['scans']['vuln'] = run_vuln_cli(rd, env, cfg)
+    
+    # Generate report
+    report_file = rd.run_dir / "full_pipeline_report.json"
+    with open(report_file, 'w') as f:
+        json.dump(results, f, indent=2, default=str)
+    
+    results['report_file'] = str(report_file)
+    return results
+
+def run_recon_cli(rd, env: Dict[str, str], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Run reconnaissance in CLI mode"""
+    logger.log("Starting enhanced reconnaissance...", "INFO")
+    results = {"phase": "reconnaissance", "targets": rd.targets, "findings": {}}
+    
+    for target in rd.targets:
+        logger.log(f"Scanning target: {target}", "INFO")
+        target_results = {}
+        
+        # Subdomain enumeration
+        if which("subfinder"):
+            subdomain_file = rd.run_dir / f"{target}_subdomains.txt"
+            run_subfinder(target, subdomain_file, env)
+            if subdomain_file.exists():
+                with open(subdomain_file, 'r') as f:
+                    target_results['subdomains'] = [line.strip() for line in f if line.strip()]
+        
+        # HTTP probe
+        if target_results.get('subdomains'):
+            all_targets_file = rd.run_dir / f"{target}_all_targets.txt"
+            with open(all_targets_file, 'w') as f:
+                f.write(f"{target}\n")
+                f.write('\n'.join(target_results['subdomains']))
+            
+            http_file = rd.run_dir / f"{target}_http_results.json"
+            run_httpx(all_targets_file, http_file, env, cfg.get('timeout', 10))
+            if http_file.exists():
+                try:
+                    with open(http_file, 'r') as f:
+                        target_results['http_services'] = [json.loads(line) for line in f if line.strip()]
+                except json.JSONDecodeError:
+                    pass
+        
+        # Technology detection
+        if target_results.get('http_services'):
+            for service in target_results['http_services'][:5]:  # Limit to first 5
+                url = service.get('url', '')
+                if url:
+                    tech_file = rd.run_dir / f"{target}_tech_{hash(url) % 1000}.json"
+                    run_whatweb(url, tech_file, env)
+        
+        results['findings'][target] = target_results
+    
+    return results
+
+def run_vuln_cli(rd, env: Dict[str, str], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Run vulnerability assessment in CLI mode"""
+    logger.log("Starting vulnerability assessment...", "INFO")
+    results = {"phase": "vulnerability", "targets": rd.targets, "vulnerabilities": {}}
+    
+    for target in rd.targets:
+        logger.log(f"Vulnerability scanning: {target}", "INFO")
+        target_vulns = {}
+        
+        # Get HTTP services from recon phase
+        http_file = rd.run_dir / f"{target}_http_results.json"
+        urls = []
+        if http_file.exists():
+            try:
+                with open(http_file, 'r') as f:
+                    for line in f:
+                        if line.strip():
+                            service = json.loads(line)
+                            if service.get('url'):
+                                urls.append(service['url'])
+            except json.JSONDecodeError:
+                urls = [f"http://{target}"]
+        else:
+            urls = [f"http://{target}"]
+        
+        # Nuclei scanning
+        if which("nuclei") and urls:
+            for url in urls[:3]:  # Limit to first 3 URLs
+                nuclei_file = rd.run_dir / f"{target}_nuclei_{hash(url) % 1000}.json"
+                run_cmd([
+                    "nuclei", "-u", url, "-severity", "low,medium,high,critical",
+                    "-jsonl", "-silent", "-o", str(nuclei_file)
+                ], env=env, timeout=300, check_return=False)
+                
+                if nuclei_file.exists():
+                    try:
+                        with open(nuclei_file, 'r') as f:
+                            vulns = []
+                            for line in f:
+                                if line.strip():
+                                    vuln = json.loads(line)
+                                    vulns.append(vuln)
+                            target_vulns[url] = vulns
+                    except json.JSONDecodeError:
+                        pass
+        
+        # Directory fuzzing
+        if urls:
+            for url in urls[:2]:  # Limit to first 2 URLs
+                fuzz_file = rd.run_dir / f"{target}_fuzz_{hash(url) % 1000}.json"
+                common_wordlist = EXTRA_DIR / "common_directories.txt"
+                if common_wordlist.exists():
+                    run_ffuf(url, common_wordlist, fuzz_file, env)
+        
+        results['vulnerabilities'][target] = target_vulns
+    
+    return results
+
+def save_results_to_file(results: Dict[str, Any], filename: str, format_type: str):
+    """Save scan results to file in specified format"""
+    output_path = Path(filename)
+    
+    try:
+        if format_type == 'json':
+            with open(output_path, 'w') as f:
+                json.dump(results, f, indent=2, default=str)
+        elif format_type == 'xml':
+            # Simple XML conversion
+            xml_content = dict_to_xml(results, 'scan_results')
+            with open(output_path, 'w') as f:
+                f.write(xml_content)
+        elif format_type == 'html':
+            html_content = generate_html_report(results)
+            with open(output_path, 'w') as f:
+                f.write(html_content)
+        else:  # txt format
+            txt_content = dict_to_text(results)
+            with open(output_path, 'w') as f:
+                f.write(txt_content)
+        
+        logger.log(f"Results saved to: {output_path}", "SUCCESS")
+    except Exception as e:
+        logger.log(f"Failed to save results: {e}", "ERROR")
+
+def display_results(results: Dict[str, Any], format_type: str, quiet: bool = False):
+    """Display scan results in specified format"""
+    if quiet:
+        return
+    
+    if format_type == 'json':
+        print(json.dumps(results, indent=2, default=str))
+    else:
+        print(dict_to_text(results))
+
+def dict_to_xml(data: Dict[str, Any], root_name: str = "data") -> str:
+    """Convert dictionary to XML format"""
+    def dict_to_xml_recursive(d, name):
+        if isinstance(d, dict):
+            items = []
+            for k, v in d.items():
+                items.append(dict_to_xml_recursive(v, k))
+            return f"<{name}>{''.join(items)}</{name}>"
+        elif isinstance(d, list):
+            items = []
+            for item in d:
+                items.append(dict_to_xml_recursive(item, "item"))
+            return f"<{name}>{''.join(items)}</{name}>"
+        else:
+            return f"<{name}>{str(d)}</{name}>"
+    
+    return f'<?xml version="1.0" encoding="UTF-8"?>\n{dict_to_xml_recursive(data, root_name)}'
+
+def dict_to_text(data: Dict[str, Any], indent: int = 0) -> str:
+    """Convert dictionary to readable text format"""
+    text = ""
+    prefix = "  " * indent
+    
+    if isinstance(data, dict):
+        for key, value in data.items():
+            text += f"{prefix}{key}:\n"
+            text += dict_to_text(value, indent + 1)
+    elif isinstance(data, list):
+        for i, item in enumerate(data):
+            text += f"{prefix}[{i}]:\n"
+            text += dict_to_text(item, indent + 1)
+    else:
+        text += f"{prefix}{str(data)}\n"
+    
+    return text
+
+def generate_html_report(results: Dict[str, Any]) -> str:
+    """Generate HTML report from results"""
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Bl4ckC3ll_PANTHEON Scan Report</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 40px; }}
+        .header {{ background: #333; color: white; padding: 20px; }}
+        .section {{ margin: 20px 0; padding: 15px; border: 1px solid #ddd; }}
+        .vulnerability {{ background: #ffe6e6; padding: 10px; margin: 5px 0; }}
+        .info {{ background: #e6f3ff; padding: 10px; margin: 5px 0; }}
+        pre {{ background: #f5f5f5; padding: 10px; overflow-x: auto; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Bl4ckC3ll_PANTHEON Security Scan Report</h1>
+        <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </div>
+    <div class="section">
+        <h2>Scan Results</h2>
+        <pre>{json.dumps(results, indent=2, default=str)}</pre>
+    </div>
+</body>
+</html>"""
+    
+    return html
 
 def launch_advanced_tui():
     """Launch the advanced Terminal User Interface"""
