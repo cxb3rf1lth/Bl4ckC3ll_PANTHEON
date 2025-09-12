@@ -16,6 +16,15 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 import logging
 
+# Enhanced modules integration
+try:
+    from enhanced_tool_manager import enhanced_which
+    ENHANCED_TOOL_MANAGER_AVAILABLE = True
+except ImportError:
+    ENHANCED_TOOL_MANAGER_AVAILABLE = False
+    def enhanced_which(tool):
+        return None
+
 # Import main components - using try/except for graceful fallback
 try:
     from bl4ckc3ll_p4nth30n import (
@@ -312,11 +321,25 @@ class EnhancedScanner:
         self.logger = PantheonLogger("EnhancedScanner")
         
     def enhanced_nuclei_scan(self, targets: List[str], output_dir: Path) -> Tuple[bool, int]:
-        """Enhanced nuclei scan with adaptive settings"""
-        if not which('nuclei'):
-            self.logger.log("Nuclei not available, skipping scan", "WARNING")
-            return False, 0
+        """Enhanced nuclei scan with adaptive settings and fallback"""
+        # Check tool availability using enhanced tool manager
+        tool_available = False
+        if ENHANCED_TOOL_MANAGER_AVAILABLE:
+            nuclei_path = enhanced_which('nuclei')
+            tool_available = nuclei_path is not None and not nuclei_path.startswith('virtual:')
+        else:
+            tool_available = which('nuclei')
         
+        # Try nuclei first if available, otherwise use fallback
+        if tool_available:
+            return self._nuclei_scan_with_tool(targets, output_dir)
+        else:
+            # Use fallback scanner
+            self.logger.log("Nuclei not available, using fallback scanner", "INFO")
+            return self._fallback_scan(targets, output_dir)
+    
+    def _nuclei_scan_with_tool(self, targets: List[str], output_dir: Path) -> Tuple[bool, int]:
+        """Original nuclei scan with external tool"""
         if self.scan_manager.should_skip_tool('nuclei'):
             return False, 0
         
@@ -400,6 +423,37 @@ class EnhancedScanner:
         self.logger.log(f"Nuclei scan completed: {success_count}/{len(targets)} targets successful ({success_rate:.1%})")
         
         return success_rate >= 0.8, findings_count
+    
+    def _fallback_scan(self, targets: List[str], output_dir: Path) -> Tuple[bool, int]:
+        """Fallback scan using built-in capabilities"""
+        try:
+            # Import fallback scanner
+            from fallback_scanner import run_fallback_scan
+            
+            # Run fallback scan
+            success, findings_count = run_fallback_scan(targets, output_dir)
+            
+            # Record results for each target
+            for target in targets:
+                scan_result = ScanResult(
+                    target=target,
+                    tool='fallback_scanner',
+                    start_time=time.time(),
+                    end_time=time.time(),
+                    success=success,
+                    findings_count=findings_count // len(targets) if targets else 0  # Approximate
+                )
+                self.scan_manager.record_result(scan_result)
+            
+            self.logger.log(f"Fallback scan completed: {findings_count} findings from {len(targets)} targets")
+            return success, findings_count
+            
+        except ImportError:
+            self.logger.log("Fallback scanner not available", "ERROR")
+            return False, 0
+        except Exception as e:
+            self.logger.log(f"Fallback scan failed: {e}", "ERROR")
+            return False, 0
     
     def enhanced_subdomain_enum(self, domain: str, output_dir: Path) -> Tuple[bool, List[str]]:
         """Enhanced subdomain enumeration with multiple tools and fallbacks"""

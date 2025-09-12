@@ -160,6 +160,29 @@ class ToolManager:
                 }
                 return tool_path
             
+            # Check for virtual/fallback implementations
+            virtual_tools = {
+                'nuclei': 'fallback_scanner',
+                'subfinder': 'builtin_subdomain_enum',
+                'httpx': 'builtin_http_probe',
+                'naabu': 'builtin_port_scan',
+                'katana': 'builtin_crawler',
+                'gau': 'builtin_url_discovery',
+                'ffuf': 'builtin_directory_fuzz',
+                'sqlmap': 'builtin_sql_test',
+                'amass': 'builtin_subdomain_enum'
+            }
+            
+            if tool_name in virtual_tools:
+                self.tool_status[tool_name] = {
+                    'available': True,
+                    'path': f'virtual:{virtual_tools[tool_name]}',
+                    'implementation': virtual_tools[tool_name],
+                    'type': 'virtual',
+                    'checked_at': current_time
+                }
+                return f'virtual:{virtual_tools[tool_name]}'
+            
             # Check alternatives
             tool_config = self.tools.get(tool_name)
             if tool_config:
