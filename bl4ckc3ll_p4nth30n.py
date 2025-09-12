@@ -26,6 +26,45 @@ from typing import Dict, List, Any, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import importlib.util
 
+# Enhanced modules integration
+try:
+    from enhanced_scanning import (
+        adaptive_scan_manager, enhanced_scanner, 
+        get_current_success_rate, run_enhanced_scanning
+    )
+    ENHANCED_SCANNING_AVAILABLE = True
+except ImportError:
+    ENHANCED_SCANNING_AVAILABLE = False
+
+try:
+    from enhanced_tool_manager import (
+        tool_manager, enhanced_which, check_tool_availability,
+        install_missing_tools, get_tool_coverage_report
+    )
+    ENHANCED_TOOL_MANAGER_AVAILABLE = True
+except ImportError:
+    ENHANCED_TOOL_MANAGER_AVAILABLE = False
+
+try:
+    from enhanced_validation import (
+        enhanced_validator, reliability_tracker,
+        validate_target_input, validate_targets_file,
+        get_system_reliability_score
+    )
+    ENHANCED_VALIDATION_AVAILABLE = True
+except ImportError:
+    ENHANCED_VALIDATION_AVAILABLE = False
+
+try:
+    from performance_monitor import (
+        performance_monitor, start_performance_monitoring,
+        stop_performance_monitoring, record_operation_result,
+        get_current_performance_metrics, is_success_rate_target_met
+    )
+    PERFORMANCE_MONITOR_AVAILABLE = True
+except ImportError:
+    PERFORMANCE_MONITOR_AVAILABLE = False
+
 # BCAR Integration
 try:
     from bcar import BCARCore, PantheonBCARIntegration
@@ -2669,17 +2708,49 @@ def _bump_path() -> None:
     add = [
         home / ".local/bin",
         home / "go/bin",
+        home / ".go/bin",
+        "/usr/local/go/bin",
         "/usr/local/bin",
         "/usr/bin",
         "/bin",
         "/opt/metasploit-framework/bin",
+        "/snap/bin",  # For snap packages
+        "/usr/games",  # Sometimes tools are installed here
     ]
+    
+    # Also set GOPATH and GOBIN if not set
+    if not os.environ.get("GOPATH"):
+        os.environ["GOPATH"] = str(home / "go")
+    
+    if not os.environ.get("GOBIN"):
+        os.environ["GOBIN"] = str(home / "go/bin")
+    
+    # Ensure Go bin directories exist
+    go_bin = home / "go/bin"
+    if not go_bin.exists():
+        try:
+            go_bin.mkdir(parents=True, exist_ok=True)
+            logger.log(f"Created Go bin directory: {go_bin}", "DEBUG")
+        except Exception as e:
+            logger.log(f"Failed to create Go bin directory: {e}", "WARNING")
+    
     for p in add:
         s = str(p)
         if s not in envpath:
-            envpath = s + os.pathsep + envpath
+            try:
+                # Check if path exists - handle both Path objects and strings
+                if hasattr(p, 'exists'):
+                    exists = p.exists()
+                else:
+                    exists = os.path.exists(s)
+                
+                if exists:
+                    envpath = s + os.pathsep + envpath
+            except Exception:
+                # If we can't check existence, skip this path
+                continue
     os.environ["PATH"] = envpath
-    logger.log("PATH updated", "DEBUG")
+    logger.log("PATH updated with Go environment", "DEBUG")
 
 _bump_path()
 
@@ -2986,7 +3057,14 @@ def save_cfg(cfg: Dict[str, Any]):
     atomic_write(CFG_FILE, json.dumps(cfg, indent=2))
 
 def which(tool: str) -> bool:
-    return shutil.which(tool) is not None
+    """Enhanced tool detection with fallback alternatives"""
+    if ENHANCED_TOOL_MANAGER_AVAILABLE:
+        # Use enhanced tool manager
+        result = enhanced_which(tool)
+        return result is not None
+    else:
+        # Fallback to standard shutil.which
+        return shutil.which(tool) is not None
 
 # ---------- Enhanced Tool Fallback System ----------
 
