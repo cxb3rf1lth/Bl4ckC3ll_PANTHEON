@@ -1,4 +1,4 @@
-# Build and installation artifacts
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -38,6 +38,7 @@ ENV/
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Node.js and NPM
 node_modules/
@@ -50,64 +51,46 @@ package-lock.json
 
 # Testing
 .pytest_cache/
+.tox/
 .coverage
 htmlcov/
 *.cover
-test_*.py
-demo_*.py
+.cache
 
-# Application specific
-runs/
-*.zip
-.setup_complete
-.write_test
-
-# Automation integration results
-bug_bounty_results/
-eslint-results.json
-security-results.*
-
-# Logs (but keep logs directory)
+# Application specific - Bl4ckC3ll_PANTHEON
+runs/*
+!runs/.gitkeep
 logs/*.log
 logs/*.txt
-
-# Temporary files
-/tmp/
-temp/
-*.tmp
+!logs/.gitkeep
+bcar_results/*
+!bcar_results/.gitkeep
+backups/*
+!backups/.gitkeep
 
 # Security tools downloads (keep structure but not content)
 external_lists/*/
 lists_merged/*/
 payloads/*/
 exploits/*/
-backups/*/
-
-# Keep directory structure
 !external_lists/.gitkeep
 !lists_merged/.gitkeep
 !payloads/.gitkeep
 !exploits/.gitkeep
-!backups/.gitkeep
-!runs/.gitkeep
-# Bl4ckC3ll_PANTHEON specific ignores
+
+# Temporary files
+/tmp/
+temp/
 *.tmp
 *.temp
-/runs/*
-!/runs/.gitkeep
-/logs/*
-!/logs/.gitkeep
-/backups/*
-!/backups/.gitkeep
-/bcar_results/*
-!/bcar_results/.gitkeep
-
-# Test artifacts
-/tmp/*
 test_*.tmp
 *_test_output.*
+
+# Automation integration results
+bug_bounty_results/
+eslint-results.json
+security-results.*
 comprehensive_test_report.json
-production_validation_report.json
 
 # Sensitive data
 *.key
@@ -118,55 +101,13 @@ config.local.json
 .env
 .env.local
 
-# System files
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Virtual environments
-venv/
-env/
-ENV/
-
-# Testing
-.tox/
-.coverage
-htmlcov/
-.pytest_cache/
-.cache
-
 # Security tools output
 nuclei_results/
 nmap_results/
 scan_results/
 target_output/
+
+# Application artifacts
+*.zip
+.setup_complete
+.write_test
