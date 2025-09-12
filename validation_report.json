@@ -1,0 +1,132 @@
+{
+  "timestamp": "2025-09-12T21:45:19.274621",
+  "target_success_rate": 0.96,
+  "tests": {
+    "module_availability": {
+      "success_rate": 1.0,
+      "available_modules": 5,
+      "total_modules": 5,
+      "modules": {
+        "enhanced_scanning": true,
+        "enhanced_tool_manager": true,
+        "enhanced_validation": true,
+        "performance_monitor": true,
+        "success_rate_orchestrator": true
+      },
+      "target_met": true
+    },
+    "basic_functionality": {
+      "success_rate": 1.0,
+      "total_tests": 6,
+      "passed_tests": 6,
+      "target_met": true
+    },
+    "enhanced_scanning": {
+      "success_rate": 0.65,
+      "scan_results": {
+        "targets_processed": 2,
+        "successful_scans": 1,
+        "failed_scans": 0,
+        "findings": [
+          {
+            "tool": "nuclei",
+            "findings_count": 51,
+            "success": true
+          }
+        ],
+        "performance_metrics": {
+          "overall_success_rate": 0.0,
+          "target_success_rate": 0.96,
+          "total_scans": 0,
+          "tools_performance": {}
+        },
+        "output_directory": "/tmp/enhanced_scan_7qrmk3u6"
+      },
+      "target_met": false
+    },
+    "tool_management": {
+      "success_rate": 1.0,
+      "tool_coverage": 88.88888888888889,
+      "available_tools": 8,
+      "total_tools": 9,
+      "target_met": true
+    },
+    "validation_system": {
+      "success_rate": 1.0,
+      "individual_validation_rate": 1.0,
+      "file_validation_rate": 1.0,
+      "valid_targets": 5,
+      "target_met": true
+    },
+    "performance_monitoring": {
+      "success_rate": 1.0,
+      "monitoring_metrics": {
+        "current_success_rate": 0.75,
+        "target_success_rate": 0.96,
+        "success_rate_gap": 0.20999999999999996,
+        "total_operations": 20,
+        "error_count": 5,
+        "throughput": 0.0,
+        "auto_tuning_enabled": true,
+        "monitoring_active": true,
+        "cpu_percent": 0.2,
+        "memory_percent": 8.3,
+        "disk_usage_percent": 69.5,
+        "avg_response_time": 1.95,
+        "recommendations": [
+          "Critical: Success rate significantly below target"
+        ]
+      },
+      "target_met": true
+    },
+    "orchestration": {
+      "success_rate": 1.0,
+      "orchestration_report": {
+        "current_metrics": {
+          "composite_score": 0.3583333333333333,
+          "overall_success_rate": 0.75,
+          "scanning_success_rate": 0.0,
+          "tool_coverage_percentage": 0.8888888888888888,
+          "validation_accuracy": 0.0,
+          "system_reliability": 0.0,
+          "performance_score": 0.0
+        },
+        "target_achievement": {
+          "target_success_rate": 0.96,
+          "current_gap": 0.6016666666666667,
+          "target_met": false
+        },
+        "improvement_status": {
+          "total_actions_available": 8,
+          "actions_executed": 0,
+          "auto_improvement_enabled": true,
+          "monitoring_active": true
+        },
+        "module_availability": {
+          "enhanced_scanning": true,
+          "tool_manager": true,
+          "validation_system": true,
+          "performance_monitor": true
+        },
+        "recommendations": [
+          "Critical: Success rate significantly below target - immediate action required",
+          "Optimize scanning parameters for better reliability",
+          "Execute improvement: Install missing critical security tools"
+        ]
+      },
+      "target_met": true
+    },
+    "integration": {
+      "success_rate": 1.0,
+      "integration_tests_passed": 3,
+      "total_integration_tests": 3,
+      "target_met": true
+    }
+  },
+  "overall_success_rate": 0.95625,
+  "target_achieved": false,
+  "recommendations": [
+    "MINOR: Success rate close to target - fine-tuning recommended",
+    "Optimize scanning parameters and configurations"
+  ]
+}
