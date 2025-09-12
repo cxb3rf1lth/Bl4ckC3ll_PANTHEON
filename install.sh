@@ -196,6 +196,16 @@ install_go_tools() {
         ["paramspider"]="github.com/devanshbatham/paramspider@latest"
         ["dalfox"]="github.com/hahwul/dalfox/v2@latest"
         ["amass"]="github.com/owasp-amass/amass/v4/cmd/amass@master"
+        # Enhanced security tools for new capabilities
+        ["trivy"]="github.com/aquasecurity/trivy/cmd/trivy@latest"
+        ["dive"]="github.com/wagoodman/dive@latest"
+        ["syft"]="github.com/anchore/syft/cmd/syft@latest"
+        ["grype"]="github.com/anchore/grype/cmd/grype@latest"
+        ["cosign"]="github.com/sigstore/cosign/cmd/cosign@latest"
+        ["interactsh-client"]="github.com/projectdiscovery/interactsh/cmd/interactsh-client@latest"
+        ["proxify"]="github.com/projectdiscovery/proxify/cmd/proxify@latest"
+        ["notify"]="github.com/projectdiscovery/notify/cmd/notify@latest"
+        ["cloudlist"]="github.com/projectdiscovery/cloudlist/cmd/cloudlist@latest"
     )
     
     for tool in "${!tools[@]}"; do
@@ -635,7 +645,9 @@ install_security_tools() {
     
     # Install APT tools
     log_info "Installing APT-based security tools..."
-    local apt_tools=("nmap" "sqlmap" "nikto" "dirb" "masscan" "sslscan" "dnsrecon" "whois" "curl" "wget")
+    local apt_tools=("nmap" "sqlmap" "nikto" "dirb" "masscan" "sslscan" "dnsrecon" "whois" "curl" "wget" 
+                     "docker.io" "docker-compose" "binwalk" "strings" "file" "openssl" "dig" "hcitool" 
+                     "iwlist" "nmcli" "netsh" "python3-pip" "yara" "exiftool" "xxd" "hexdump")
     
     if command -v apt &> /dev/null; then
         sudo apt update -qq
@@ -694,7 +706,9 @@ install_security_tools() {
     
     # Install Python tools
     log_info "Installing Python-based security tools..."
-    local python_tools=("arjun" "dirsearch" "xsstrike")
+    local python_tools=("arjun" "dirsearch" "xsstrike" "pycryptodome" "requests" "beautifulsoup4" 
+                        "lxml" "pyfiglet" "colorama" "tqdm" "psutil" "pyyaml" "netifaces" 
+                        "scapy" "cryptography" "paramiko" "pexpect" "netaddr" "ipaddress")
     
     for tool in "${python_tools[@]}"; do
         if ! command -v "$tool" &> /dev/null && ! python3 -c "import $tool" &> /dev/null; then
