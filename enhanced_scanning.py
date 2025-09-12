@@ -5,7 +5,6 @@ Advanced scanning capabilities with intelligent depth and adaptive techniques
 """
 
 import asyncio
-import aiohttp
 import json
 import os
 import time
@@ -17,6 +16,19 @@ import threading
 import subprocess
 import hashlib
 import re
+
+# Optional async HTTP client
+try:
+    import aiohttp
+    HAS_AIOHTTP = True
+except ImportError:
+    HAS_AIOHTTP = False
+    # Fallback to requests for basic functionality
+    try:
+        import requests
+        HAS_REQUESTS = True
+    except ImportError:
+        HAS_REQUESTS = False
 
 class AdaptiveScanManager:
     """Adaptive scanning manager with intelligent depth and resource management"""
@@ -101,6 +113,10 @@ class AdaptiveScanManager:
             'adaptive_stats': {}
         }
         
+        if not HAS_AIOHTTP:
+            print("⚠️ aiohttp not available, using simplified discovery")
+            return self._simplified_web_discovery(base_url)
+        
         # Phase 1: Basic reconnaissance
         basic_info = await self._basic_reconnaissance(base_url)
         results.update(basic_info)
@@ -123,6 +139,56 @@ class AdaptiveScanManager:
         
         return results
     
+    def _simplified_web_discovery(self, base_url: str) -> Dict[str, Any]:
+        """Simplified web discovery without async requirements"""
+        results = {
+            'base_url': base_url,
+            'discovered_paths': [],
+            'discovered_files': [],
+            'interesting_responses': [],
+            'technology_stack': [],
+            'security_headers': {},
+            'adaptive_stats': {},
+            'scan_mode': 'simplified'
+        }
+        
+        if not HAS_REQUESTS:
+            print("⚠️ Neither aiohttp nor requests available")
+            return results
+        
+        try:
+            # Basic request to analyze
+            response = requests.get(base_url, timeout=10, headers={'User-Agent': self.user_agent})
+            headers = dict(response.headers)
+            content = response.text
+            
+            # Identify technologies
+            results['technology_stack'] = self._identify_technologies(headers, content)
+            
+            # Extract security headers
+            results['security_headers'] = self._extract_security_headers(headers)
+            
+            # Extract paths from content
+            results['discovered_paths'] = self._extract_paths_from_content(content)
+            
+            # Test common paths
+            common_paths = ['admin', 'login', 'api', 'config', 'backup']
+            for path in common_paths:
+                try:
+                    test_url = f"{base_url.rstrip('/')}/{path}"
+                    test_response = requests.head(test_url, timeout=5, headers={'User-Agent': self.user_agent})
+                    if test_response.status_code in [200, 301, 302, 403]:
+                        results['discovered_paths'].append(path)
+                except:
+                    continue
+            
+            results['adaptive_stats'] = {'scan_mode': 'simplified', 'total_requests': len(common_paths) + 1}
+            
+        except Exception as e:
+            print(f"⚠️ Simplified discovery failed: {e}")
+        
+        return results
+    
     async def _basic_reconnaissance(self, base_url: str) -> Dict[str, Any]:
         """Perform basic reconnaissance to identify technologies and basic structure"""
         results = {
@@ -131,6 +197,9 @@ class AdaptiveScanManager:
             'server_info': {},
             'discovered_paths': []
         }
+        
+        if not HAS_AIOHTTP:
+            return results
         
         try:
             async with aiohttp.ClientSession(
@@ -510,6 +579,14 @@ class AdaptiveScanManager:
             'assessment_summary': {}
         }
         
+        if not HAS_AIOHTTP:
+            print("⚠️ aiohttp not available, skipping advanced vulnerability tests")
+            results['assessment_summary'] = {
+                'scan_mode': 'simplified',
+                'message': 'Advanced vulnerability testing requires aiohttp'
+            }
+            return results
+        
         # Load payloads
         xss_payloads = self.payloads.get('xss', [])[:20]  # Limit for performance
         sqli_payloads = self.payloads.get('sqli', [])[:20]
@@ -846,11 +923,46 @@ async def run_enhanced_scanning(target_url: str, config: Dict[str, Any] = None) 
     """Run enhanced scanning with adaptive techniques"""
     scanner = AdaptiveScanManager(config)
     
-    # Run web discovery
-    discovery_results = await scanner.adaptive_web_discovery(target_url)
+    try:
+        # Run web discovery
+        discovery_results = await scanner.adaptive_web_discovery(target_url)
+        
+        # Run vulnerability assessment
+        vuln_results = await scanner.enhanced_vulnerability_assessment(target_url)
+        
+        # Combine results
+        combined_results = {
+            'target_url': target_url,
+            'discovery': discovery_results,
+            'vulnerabilities': vuln_results,
+            'scan_metadata': {
+                'scan_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'scanner_version': 'Enhanced_v1.0',
+                'adaptive_features': True,
+                'async_enabled': HAS_AIOHTTP
+            }
+        }
+        
+        return combined_results
     
-    # Run vulnerability assessment
-    vuln_results = await scanner.enhanced_vulnerability_assessment(target_url)
+    except Exception as e:
+        # Fallback to simplified scanning
+        print(f"⚠️ Advanced scanning failed, using simplified mode: {e}")
+        return run_simplified_scanning(target_url, config)
+
+def run_simplified_scanning(target_url: str, config: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Run simplified scanning without async requirements"""
+    scanner = AdaptiveScanManager(config)
+    
+    # Run simplified discovery
+    discovery_results = scanner._simplified_web_discovery(target_url)
+    
+    # Basic vulnerability checks (without async)
+    vuln_results = {
+        'target_url': target_url,
+        'basic_checks': [],
+        'scan_mode': 'simplified'
+    }
     
     # Combine results
     combined_results = {
@@ -859,8 +971,9 @@ async def run_enhanced_scanning(target_url: str, config: Dict[str, Any] = None) 
         'vulnerabilities': vuln_results,
         'scan_metadata': {
             'scan_time': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'scanner_version': 'Enhanced_v1.0',
-            'adaptive_features': True
+            'scanner_version': 'Enhanced_v1.0_simplified',
+            'adaptive_features': False,
+            'async_enabled': False
         }
     }
     

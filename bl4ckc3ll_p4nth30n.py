@@ -542,8 +542,31 @@ class Logger:
         self.log_file = LOG_DIR / "bl4ckc3ll_p4nth30n.log"
         self.console_lock = threading.Lock()
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
+        self.current_level = "INFO"
+        self.level_hierarchy = {
+            "DEBUG": 0,
+            "INFO": 1,
+            "WARNING": 2,
+            "ERROR": 3,
+            "SUCCESS": 1
+        }
+
+    def set_level(self, level: str):
+        """Set the minimum logging level"""
+        if level in self.level_hierarchy:
+            self.current_level = level
+
+    def should_log(self, level: str) -> bool:
+        """Check if message should be logged based on current level"""
+        current_priority = self.level_hierarchy.get(self.current_level, 1)
+        message_priority = self.level_hierarchy.get(level, 1)
+        return message_priority >= current_priority
 
     def log(self, message: str, level: str = "INFO"):
+        # Only log if level meets threshold
+        if not self.should_log(level):
+            return
+            
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_message = f"{timestamp} - {level} - {message}"
         with self.console_lock:
@@ -6100,6 +6123,10 @@ def clear_all_targets():
     input("Press Enter to continue...")
 
 # Supporting functions for enhanced target management
+def validate_target(target: str) -> bool:
+    """Validate a single target (domain or IP)"""
+    return validate_target_input(target) and validate_single_target(target)
+
 def validate_target_input(target: str) -> bool:
     """Validate target input format"""
     if not target or len(target) > 200:
