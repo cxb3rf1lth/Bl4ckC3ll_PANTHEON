@@ -169,29 +169,110 @@ class SecurityValidator:
     }
     
     @staticmethod
-    def validate_domain(domain: str) -> bool:
-        """Validate domain name for security"""
-        if not isinstance(domain, str) or len(domain) > 255:
+    def validate_domain(domain: str, logger=None) -> bool:
+        """Enhanced domain validation with detailed error reporting"""
+        if logger is None:
+            logger = PantheonLogger("DOMAIN_VALIDATOR")
+            
+        if not isinstance(domain, str):
+            logger.error(f"Domain must be a string, got {type(domain).__name__}")
             return False
+            
+        if not domain:
+            logger.error("Domain cannot be empty")
+            return False
+            
+        if len(domain) > 255:
+            logger.error(f"Domain too long: {len(domain)} > 255 characters")
+            return False
+        
+        # Remove protocol if present
+        clean_domain = domain.replace('http://', '').replace('https://', '').replace('www.', '')
+        clean_domain = clean_domain.split('/')[0].split(':')[0]
+        
         domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
-        return bool(re.match(domain_pattern, domain))
+        if not re.match(domain_pattern, clean_domain):
+            logger.error(f"Invalid domain format: {domain}")
+            logger.info("Domain should be in format: example.com or subdomain.example.com")
+            return False
+            
+        if clean_domain.count('.') == 0:
+            logger.warning(f"Domain appears incomplete: {clean_domain} (missing TLD?)")
+            
+        return True
     
     @staticmethod
-    def validate_ip(ip: str) -> bool:
-        """Validate IP address for security"""
+    def validate_ip(ip: str, logger=None) -> bool:
+        """Enhanced IP validation with detailed error reporting"""
+        if logger is None:
+            logger = PantheonLogger("IP_VALIDATOR")
+            
+        if not isinstance(ip, str):
+            logger.error(f"IP must be a string, got {type(ip).__name__}")
+            return False
+            
+        if not ip:
+            logger.error("IP address cannot be empty")
+            return False
+            
         try:
-            ipaddress.ip_address(ip)
+            ip_obj = ipaddress.ip_address(ip)
+            
+            # Provide context about IP types
+            if ip_obj.is_private:
+                logger.info(f"Private IP address detected: {ip}")
+            elif ip_obj.is_loopback:
+                logger.info(f"Loopback IP address detected: {ip}")
+            elif ip_obj.is_multicast:
+                logger.warning(f"Multicast IP address: {ip} (may not be suitable for scanning)")
+            elif ip_obj.is_reserved:
+                logger.warning(f"Reserved IP address: {ip} (may not be scannable)")
+                
             return True
-        except ValueError:
+        except ValueError as e:
+            logger.error(f"Invalid IP address format: {ip} - {e}")
+            logger.info("IP should be in format: 192.168.1.1 or 2001:db8::1")
             return False
     
     @staticmethod
-    def validate_url(url: str) -> bool:
-        """Validate URL for security"""
+    def validate_url(url: str, logger=None) -> bool:
+        """Enhanced URL validation with detailed error reporting"""
+        if logger is None:
+            logger = PantheonLogger("URL_VALIDATOR")
+            
+        if not isinstance(url, str):
+            logger.error(f"URL must be a string, got {type(url).__name__}")
+            return False
+            
+        if not url:
+            logger.error("URL cannot be empty")
+            return False
+            
+        if len(url) > 2048:
+            logger.error(f"URL too long: {len(url)} > 2048 characters")
+            return False
+            
         try:
             parsed = urlparse(url)
-            return all([parsed.scheme, parsed.netloc])
-        except Exception:
+            
+            if not parsed.scheme:
+                logger.error(f"URL missing protocol: {url}")
+                logger.info("URL should start with http:// or https://")
+                return False
+                
+            if parsed.scheme not in ['http', 'https']:
+                logger.error(f"Unsupported URL protocol: {parsed.scheme}")
+                logger.info("Only HTTP and HTTPS protocols are supported")
+                return False
+                
+            if not parsed.netloc:
+                logger.error(f"URL missing host/domain: {url}")
+                logger.info("URL should include a valid domain name")
+                return False
+                
+            return True
+        except Exception as e:
+            logger.error(f"URL parsing error: {url} - {e}")
             return False
     
     @staticmethod
@@ -225,6 +306,214 @@ class SecurityValidator:
                 return False
         except Exception:
             return False
+
+# ============================================================================
+# ENHANCED ERROR HANDLING SYSTEM
+# ============================================================================
+
+def safe_execute_master(func, *args, default=None, error_msg="Operation failed", 
+                       log_level="ERROR", logger=None, **kwargs):
+    """Enhanced safe execution with detailed error handling for master script"""
+    if logger is None:
+        logger = PantheonLogger("SAFE_EXECUTE")
+    
+    try:
+        return func(*args, **kwargs)
+    except FileNotFoundError as e:
+        filepath = str(e).split("'")[1] if "'" in str(e) else "unknown"
+        logger.error(f"{error_msg} - File not found: {filepath}")
+        logger.info(f"Recovery: Check if file exists, verify path permissions, or create missing directory")
+        return default
+    except PermissionError as e:
+        filepath = str(e).split("'")[1] if "'" in str(e) else "unknown"
+        logger.error(f"{error_msg} - Permission denied: {filepath}")
+        logger.info(f"Recovery: Run with appropriate permissions or check file/directory ownership")
+        return default
+    except subprocess.TimeoutExpired as e:
+        cmd = getattr(e, 'cmd', 'unknown command')
+        timeout_val = getattr(e, 'timeout', 'unknown')
+        logger.error(f"{error_msg} - Timeout after {timeout_val}s: {cmd}")
+        logger.info(f"Recovery: Increase timeout, reduce scan scope, or check network connectivity")
+        return default
+    except subprocess.CalledProcessError as e:
+        cmd = e.cmd if hasattr(e, 'cmd') else 'unknown'
+        returncode = e.returncode if hasattr(e, 'returncode') else 'unknown'
+        logger.error(f"{error_msg} - Command failed (exit code: {returncode}): {cmd}")
+        return default
+    except ConnectionError as e:
+        logger.error(f"{error_msg} - Network connection error: {e}")
+        logger.info(f"Recovery: Check internet connectivity, proxy settings, or target availability")
+        return default
+    except Exception as e:
+        error_type = type(e).__name__
+        logger.error(f"{error_msg} - {error_type}: {e}")
+        
+        # Provide contextual recovery suggestions
+        error_str = str(e).lower()
+        if 'connection' in error_str or 'network' in error_str:
+            logger.info("Recovery: Check network connectivity and firewall settings")
+        elif 'memory' in error_str or 'resource' in error_str:
+            logger.info("Recovery: Free up system resources or reduce scan intensity")
+        elif 'configuration' in error_str or 'config' in error_str:
+            logger.info("Recovery: Verify configuration file syntax and required settings")
+        else:
+            logger.info("Recovery: Check logs, verify input parameters, or try with reduced scope")
+        
+        return default
+
+def execute_tool_safely_master(tool_name: str, args: List[str], timeout: int = 300, 
+                              output_file: Optional[Path] = None, logger=None) -> bool:
+    """Enhanced tool execution for master script with fallbacks"""
+    if logger is None:
+        logger = PantheonLogger("TOOL_EXEC")
+    
+    # Check tool availability
+    if not shutil.which(tool_name):
+        install_suggestions = {
+            'nuclei': 'go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest',
+            'subfinder': 'go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest',
+            'httpx': 'go install github.com/projectdiscovery/httpx/cmd/httpx@latest',
+            'naabu': 'go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest',
+            'nmap': 'apt install nmap',
+            'sqlmap': 'apt install sqlmap'
+        }
+        
+        suggestion = install_suggestions.get(tool_name, f"Please install {tool_name}")
+        logger.warning(f"Tool '{tool_name}' not available. Install with: {suggestion}")
+        
+        # Suggest alternatives for critical tools
+        alternatives = {
+            'nuclei': 'Consider manual vulnerability testing or use nikto',
+            'nmap': 'Use netcat for basic port testing',
+            'subfinder': 'Try manual subdomain enumeration with DNS queries'
+        }
+        
+        if tool_name in alternatives:
+            logger.info(f"Alternative: {alternatives[tool_name]}")
+        
+        return False
+    
+    # Enhanced argument validation
+    for i, arg in enumerate(args):
+        if isinstance(arg, str):
+            if len(arg) > 1000:
+                logger.error(f"Argument #{i} too long for {tool_name}: {len(arg)} chars")
+                return False
+            
+            # Security validation
+            if any(pattern in arg.lower() for pattern in ['rm -rf', 'format c:', 'del *']):
+                logger.error(f"Dangerous argument detected for {tool_name}: {arg[:50]}")
+                return False
+    
+    # Execute with enhanced error handling
+    cmd = [tool_name] + args
+    logger.debug(f"Executing: {tool_name} with {len(args)} arguments")
+    
+    result = safe_execute_master(
+        subprocess.run,
+        cmd,
+        capture_output=bool(output_file),
+        text=True,
+        timeout=timeout,
+        check=False,
+        default=None,
+        error_msg=f"Tool execution failed: {tool_name}",
+        logger=logger
+    )
+    
+    if result is None:
+        logger.warning(f"Tool {tool_name} execution failed - check error messages above")
+        return False
+    
+    # Handle output
+    if output_file and hasattr(result, 'stdout'):
+        if result.stdout:
+            try:
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                output_file.write_text(result.stdout, encoding='utf-8')
+                logger.debug(f"Tool output saved to {output_file} ({len(result.stdout)} chars)")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to save output to {output_file}: {e}")
+                return False
+        else:
+            logger.warning(f"Tool {tool_name} produced no output")
+            return True
+    
+    return hasattr(result, 'returncode') and result.returncode == 0
+
+def safe_http_request_master(url: str, method: str = 'GET', timeout: int = 10, 
+                           retries: int = 3, logger=None, **kwargs) -> Optional[Dict[str, Any]]:
+    """Enhanced HTTP request function for master script"""
+    if logger is None:
+        logger = PantheonLogger("HTTP_REQUEST")
+    
+    if not HAS_REQUESTS:
+        logger.error("Requests library not available for HTTP operations")
+        return {'success': False, 'error': 'missing_dependency', 'message': 'requests not installed'}
+    
+    # URL validation
+    if not SecurityValidator.validate_url(url):
+        logger.error(f"Invalid URL format: {url}")
+        return {'success': False, 'error': 'invalid_url', 'message': 'URL format validation failed'}
+    
+    try:
+        import requests
+        from requests.adapters import HTTPAdapter
+        from requests.packages.urllib3.util.retry import Retry
+        
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=retries,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "OPTIONS", "POST"]
+        )
+        
+        session = requests.Session()
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        
+        # Set secure headers
+        headers = kwargs.get('headers', {})
+        headers.update({
+            'User-Agent': 'Bl4ckC3ll_PANTHEON_Master/10.0.0 Security Scanner',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Connection': 'keep-alive'
+        })
+        kwargs['headers'] = headers
+        kwargs['timeout'] = timeout
+        kwargs['verify'] = kwargs.get('verify', False)
+        
+        logger.debug(f"Making {method} request to {url}")
+        response = session.request(method, url, **kwargs)
+        
+        result = {
+            'status_code': response.status_code,
+            'headers': dict(response.headers),
+            'content': response.text,
+            'url': str(response.url),
+            'elapsed': response.elapsed.total_seconds(),
+            'success': True
+        }
+        
+        logger.debug(f"HTTP request successful: {url} - {response.status_code} ({response.elapsed.total_seconds():.2f}s)")
+        return result
+        
+    except requests.exceptions.ConnectionError as e:
+        logger.warning(f"Connection error for {url}: {e}")
+        return {'success': False, 'error': 'connection_error', 'message': str(e)}
+    except requests.exceptions.Timeout as e:
+        logger.warning(f"Request timeout for {url}: {e}")
+        return {'success': False, 'error': 'timeout', 'message': str(e)}
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Request error for {url}: {e}")
+        return {'success': False, 'error': 'request_error', 'message': str(e)}
+    except Exception as e:
+        logger.error(f"Unexpected error making request to {url}: {e}")
+        return {'success': False, 'error': 'unexpected_error', 'message': str(e)}
 
 # ============================================================================
 # ENHANCED LOGGING SYSTEM

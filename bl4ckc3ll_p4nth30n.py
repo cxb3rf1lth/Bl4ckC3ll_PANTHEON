@@ -592,20 +592,85 @@ logger = Logger()
 
 # ---------- Error Handling Helpers ----------
 def safe_execute(func, *args, default=None, error_msg="Operation failed", log_level="ERROR", **kwargs):
-    """Safely execute a function with standardized error handling"""
+    """Safely execute a function with enhanced error handling and recovery suggestions"""
     try:
         return func(*args, **kwargs)
     except FileNotFoundError as e:
-        logger.log(f"{error_msg} - File not found: {e}", log_level)
+        # Provide specific guidance for file not found errors
+        filepath = str(e).split("'")[1] if "'" in str(e) else "unknown"
+        logger.log(f"{error_msg} - File not found: {filepath}", log_level)
+        logger.log(f"Recovery suggestion: Check if file exists, verify path permissions, or create missing directory", "INFO")
         return default
     except PermissionError as e:
-        logger.log(f"{error_msg} - Permission denied: {e}", log_level)
+        # Provide specific guidance for permission errors
+        filepath = str(e).split("'")[1] if "'" in str(e) else "unknown"
+        logger.log(f"{error_msg} - Permission denied: {filepath}", log_level)
+        logger.log(f"Recovery suggestion: Run with appropriate permissions or check file/directory ownership", "INFO")
         return default
     except subprocess.TimeoutExpired as e:
-        logger.log(f"{error_msg} - Timeout: {e}", log_level)
+        # Provide guidance for timeout errors with tool-specific suggestions
+        cmd = getattr(e, 'cmd', 'unknown command')
+        timeout_val = getattr(e, 'timeout', 'unknown')
+        logger.log(f"{error_msg} - Timeout after {timeout_val}s: {cmd}", log_level)
+        logger.log(f"Recovery suggestion: Increase timeout, reduce scan scope, or check network connectivity", "INFO")
+        return default
+    except subprocess.CalledProcessError as e:
+        # Enhanced handling for subprocess errors
+        cmd = e.cmd if hasattr(e, 'cmd') else 'unknown'
+        returncode = e.returncode if hasattr(e, 'returncode') else 'unknown'
+        output = e.output if hasattr(e, 'output') else ''
+        stderr = e.stderr if hasattr(e, 'stderr') else ''
+        
+        logger.log(f"{error_msg} - Command failed (exit code: {returncode}): {cmd}", log_level)
+        if output:
+            logger.log(f"Command output: {output[:500]}...", "DEBUG")
+        if stderr:
+            logger.log(f"Command stderr: {stderr[:500]}...", "DEBUG")
+        
+        # Provide tool-specific recovery suggestions
+        if isinstance(cmd, list) and len(cmd) > 0:
+            tool_name = cmd[0] if isinstance(cmd[0], str) else str(cmd[0])
+            recovery_suggestions = {
+                'nuclei': 'Update nuclei templates with: nuclei -update-templates',
+                'nmap': 'Try reducing scan intensity or check target accessibility',
+                'subfinder': 'Check internet connectivity and API keys configuration',
+                'httpx': 'Verify target URLs are accessible and reduce concurrency',
+                'naabu': 'Check network permissions and reduce port range',
+                'sqlmap': 'Verify target parameter and reduce detection level'
+            }
+            
+            for tool, suggestion in recovery_suggestions.items():
+                if tool in tool_name:
+                    logger.log(f"Recovery suggestion: {suggestion}", "INFO")
+                    break
+        
+        return default
+    except ConnectionError as e:
+        logger.log(f"{error_msg} - Network connection error: {e}", log_level)
+        logger.log(f"Recovery suggestion: Check internet connectivity, proxy settings, or target availability", "INFO")
+        return default
+    except OSError as e:
+        logger.log(f"{error_msg} - System error: {e}", log_level)
+        logger.log(f"Recovery suggestion: Check system resources, disk space, or file descriptors", "INFO")
         return default
     except Exception as e:
-        logger.log(f"{error_msg}: {e}", log_level)
+        # Enhanced general exception handling with more context
+        error_type = type(e).__name__
+        logger.log(f"{error_msg} - {error_type}: {e}", log_level)
+        
+        # Try to provide contextual recovery suggestions based on error content
+        error_str = str(e).lower()
+        if 'connection' in error_str or 'network' in error_str:
+            logger.log(f"Recovery suggestion: Check network connectivity and firewall settings", "INFO")
+        elif 'memory' in error_str or 'resource' in error_str:
+            logger.log(f"Recovery suggestion: Free up system resources or reduce scan intensity", "INFO")
+        elif 'configuration' in error_str or 'config' in error_str:
+            logger.log(f"Recovery suggestion: Verify configuration file syntax and required settings", "INFO")
+        elif 'authentication' in error_str or 'auth' in error_str:
+            logger.log(f"Recovery suggestion: Check API keys, credentials, or authentication settings", "INFO")
+        else:
+            logger.log(f"Recovery suggestion: Check logs for more details, verify input parameters, or try with reduced scope", "INFO")
+        
         return default
 
 def safe_file_operation(operation, path, *args, **kwargs):
@@ -639,56 +704,474 @@ def safe_run_command(cmd, timeout=300, **kwargs):
     )
 
 def validate_input(value: str, validators: Dict[str, Any] = None, field_name: str = "input") -> bool:
-    """Enhanced input validation with security considerations"""
+    """Enhanced input validation with detailed security considerations and error reporting"""
     if validators is None:
         validators = {}
     
     # Check if empty input is allowed
     if not value and not validators.get('allow_empty', False):
+        logger.log(f"Empty {field_name} not allowed", "WARNING")
         return False
     
-    # Length validation
+    # Skip validation for empty values when allowed
+    if not value and validators.get('allow_empty', False):
+        return True
+    
+    # Length validation with specific guidance
     max_length = validators.get('max_length', 1000)
     if len(value) > max_length:
-        logger.log(f"{field_name} too long: {len(value)} > {max_length}", "WARNING")
+        logger.log(f"{field_name} exceeds maximum length: {len(value)} > {max_length} characters", "WARNING")
+        logger.log(f"Consider shortening the {field_name} or using a file for longer inputs", "INFO")
+        return False
+    
+    # Minimum length check
+    min_length = validators.get('min_length', 0)
+    if len(value) < min_length:
+        logger.log(f"{field_name} below minimum length: {len(value)} < {min_length} characters", "WARNING")
         return False
     
     # Type validation
     expected_type = validators.get('type', str)
     if expected_type == str and not isinstance(value, str):
+        logger.log(f"{field_name} must be a string, got {type(value).__name__}", "WARNING")
         return False
     
-    # Basic security checks
-    dangerous_patterns = [
-        r'[;&|`$(){}[\]\\]',  # Command injection patterns
-        r'\.\./',             # Path traversal
-        r'<script',           # XSS patterns
-        r'javascript:',       # JavaScript injection
-        r'<%.*%>',            # Template injection
-        r'{{.*}}',            # Template injection
-        r'eval\s*\(',         # Code execution
-    ]
+    # Enhanced security checks with specific pattern explanations
+    security_patterns = {
+        r'[;&|`$(){}[\]\\]': 'Command injection characters',
+        r'\.\.\/': 'Path traversal patterns',
+        r'<script[\s>]': 'XSS script tags',
+        r'javascript\s*:': 'JavaScript protocol injection',
+        r'<%.*%>': 'Server-side template injection',
+        r'{{.*}}': 'Template engine injection',
+        r'eval\s*\(': 'Code execution functions',
+        r'exec\s*\(': 'Code execution functions',
+        r'system\s*\(': 'System command execution',
+        r'passthru\s*\(': 'Command execution functions',
+        r'shell_exec\s*\(': 'Shell execution functions',
+        r'\$\{.*\}': 'Variable substitution injection',
+        r'<!--.*#.*-->': 'Server-side include injection',
+        r'<\?php': 'PHP code injection',
+        r'<%@': 'JSP code injection'
+    }
     
     import re
-    for dangerous in dangerous_patterns:
-        if re.search(dangerous, value, re.IGNORECASE):
-            logger.log(f"Potentially dangerous {field_name} detected: {value[:50]}", "WARNING")
+    for pattern, description in security_patterns.items():
+        if re.search(pattern, value, re.IGNORECASE):
+            logger.log(f"Security violation in {field_name}: {description} detected", "WARNING")
+            logger.log(f"Suspicious content: {value[:100]}...", "DEBUG")
             return False
     
-    # Pattern validation
-    pattern = validators.get('pattern')
-    if pattern and not re.match(pattern, value):
-        logger.log(f"Invalid {field_name} format", "WARNING")
-        return False
+    # Domain/URL specific validation
+    if validators.get('type') == 'domain':
+        domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+        if not re.match(domain_pattern, value):
+            logger.log(f"Invalid domain format for {field_name}: {value}", "WARNING")
+            logger.log(f"Domain should be in format: example.com or sub.example.com", "INFO")
+            return False
     
-    # Forbidden content check
+    # IP address validation
+    if validators.get('type') == 'ip':
+        try:
+            import ipaddress
+            ipaddress.ip_address(value)
+        except ValueError:
+            logger.log(f"Invalid IP address format for {field_name}: {value}", "WARNING")
+            logger.log(f"IP should be in format: 192.168.1.1 or 2001:db8::1", "INFO")
+            return False
+    
+    # URL validation
+    if validators.get('type') == 'url':
+        # More flexible URL pattern that handles both domains and IP addresses with ports
+        url_pattern = r'^https?://([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*|(\d{1,3}\.){3}\d{1,3})(:\d+)?(/.*)?$'
+        if not re.match(url_pattern, value):
+            logger.log(f"Invalid URL format for {field_name}: {value}", "WARNING")
+            logger.log(f"URL should start with http:// or https://", "INFO")
+            return False
+    
+    # Pattern validation with helpful error messages
+    pattern = validators.get('pattern')
+    if pattern:
+        if not re.match(pattern, value):
+            logger.log(f"Invalid {field_name} format - does not match expected pattern", "WARNING")
+            pattern_description = validators.get('pattern_description', 'expected format')
+            logger.log(f"Expected format: {pattern_description}", "INFO")
+            return False
+    
+    # Forbidden content check with specific reporting
     forbidden_content = validators.get('forbidden_content', [])
     for forbidden in forbidden_content:
         if forbidden.lower() in value.lower():
-            logger.log(f"Forbidden content in {field_name}: {forbidden}", "WARNING")
+            logger.log(f"Forbidden content detected in {field_name}: '{forbidden}'", "WARNING")
+            logger.log(f"Remove or replace the forbidden content and try again", "INFO")
             return False
     
+    # File path validation
+    if validators.get('type') == 'filepath':
+        if not re.match(r'^[a-zA-Z0-9._/-]+$', value):
+            logger.log(f"Invalid file path format for {field_name}: {value}", "WARNING")
+            logger.log(f"File path should contain only alphanumeric characters, dots, slashes, and hyphens", "INFO")
+            return False
+    
+    # Rate limit validation
+    if validators.get('type') == 'rate_limit':
+        try:
+            rate_val = int(value)
+            if rate_val < 1 or rate_val > 10000:
+                logger.log(f"Rate limit out of range for {field_name}: {rate_val} (should be 1-10000)", "WARNING")
+                return False
+        except ValueError:
+            logger.log(f"Rate limit must be a number for {field_name}: {value}", "WARNING")
+            return False
+    
+    logger.log(f"Input validation passed for {field_name}", "DEBUG")
     return True
+
+def validate_domain_input(domain: str) -> bool:
+    """Enhanced domain validation with detailed error reporting"""
+    if not domain:
+        logger.log("Domain cannot be empty", "WARNING")
+        return False
+    
+    # Remove protocol if present
+    domain = domain.replace('http://', '').replace('https://', '').replace('www.', '')
+    domain = domain.split('/')[0]  # Remove path
+    domain = domain.split(':')[0]  # Remove port
+    
+    if not validate_input(domain, {'type': 'domain', 'max_length': 253}, 'domain'):
+        return False
+    
+    # Additional domain-specific checks
+    if domain.count('.') == 0:
+        logger.log(f"Domain appears to be incomplete: {domain} (missing TLD?)", "WARNING")
+        logger.log("Example of valid domain: example.com", "INFO")
+        return False
+    
+    # Check for localhost or private domains
+    private_domains = ['localhost', '127.0.0.1', '0.0.0.0', 'internal', 'local']
+    if any(private in domain.lower() for private in private_domains):
+        logger.log(f"Private/local domain detected: {domain}", "INFO")
+        logger.log("Scanning local domains may have limited results", "INFO")
+    
+    return True
+
+def validate_ip_input(ip: str) -> bool:
+    """Enhanced IP address validation with detailed error reporting"""
+    if not ip:
+        logger.log("IP address cannot be empty", "WARNING")
+        return False
+    
+    if not validate_input(ip, {'type': 'ip', 'max_length': 45}, 'IP address'):
+        return False
+    
+    try:
+        import ipaddress
+        ip_obj = ipaddress.ip_address(ip)
+        
+        # Check for private/reserved IP addresses
+        if ip_obj.is_private:
+            logger.log(f"Private IP address detected: {ip}", "INFO")
+            logger.log("Scanning private IPs may require network access", "INFO")
+        elif ip_obj.is_loopback:
+            logger.log(f"Loopback IP address detected: {ip}", "INFO")
+            logger.log("Loopback scanning may have limited results", "INFO")
+        elif ip_obj.is_multicast:
+            logger.log(f"Multicast IP address detected: {ip}", "WARNING")
+            logger.log("Multicast IPs are not suitable for security scanning", "INFO")
+            return False
+        elif ip_obj.is_reserved:
+            logger.log(f"Reserved IP address detected: {ip}", "WARNING")
+            logger.log("Reserved IPs may not be scannable", "INFO")
+        
+        return True
+    except ValueError as e:
+        logger.log(f"Invalid IP address format: {ip} - {e}", "WARNING")
+        return False
+
+def validate_url_input(url: str) -> bool:
+    """Enhanced URL validation with detailed error reporting"""
+    if not url:
+        logger.log("URL cannot be empty", "WARNING")
+        return False
+    
+    if not validate_input(url, {'type': 'url', 'max_length': 2048}, 'URL'):
+        return False
+    
+    # Additional URL-specific checks
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+        
+        if not parsed.scheme:
+            logger.log(f"URL missing protocol: {url}", "WARNING")
+            logger.log("URL should start with http:// or https://", "INFO")
+            return False
+        
+        if parsed.scheme not in ['http', 'https']:
+            logger.log(f"Unsupported URL protocol: {parsed.scheme}", "WARNING")
+            logger.log("Only HTTP and HTTPS protocols are supported", "INFO")
+            return False
+        
+        if not parsed.netloc:
+            logger.log(f"URL missing host/domain: {url}", "WARNING")
+            logger.log("URL should include a valid domain name", "INFO")
+            return False
+        
+        # Validate the hostname part
+        hostname = parsed.hostname
+        if hostname:
+            # Check if it's an IP address
+            try:
+                import ipaddress
+                ipaddress.ip_address(hostname)
+                # For URLs, we accept all valid IP addresses including private ones
+                return True
+            except ValueError:
+                # It's a domain name
+                return validate_domain_input(hostname)
+        
+        return True
+    except Exception as e:
+        logger.log(f"URL parsing error: {url} - {e}", "WARNING")
+        return False
+
+def create_fallback_functions():
+    """Create fallback functions for common tools when they're not available"""
+    
+    def fallback_subdomain_enum(args, output_file):
+        """Fallback subdomain enumeration using DNS brute force"""
+        logger.log("Using fallback subdomain enumeration method", "INFO")
+        
+        # Extract domain from args
+        domain = None
+        for i, arg in enumerate(args):
+            if i > 0 and not arg.startswith('-'):  # Likely the domain
+                domain = arg
+                break
+        
+        if not domain:
+            logger.log("Cannot determine domain for fallback subdomain enumeration", "ERROR")
+            return False
+        
+        # Simple DNS-based subdomain discovery
+        common_subdomains = [
+            'www', 'mail', 'ftp', 'admin', 'api', 'test', 'dev', 'staging', 
+            'blog', 'shop', 'portal', 'secure', 'vpn', 'cdn', 'm', 'mobile'
+        ]
+        
+        found_subdomains = []
+        
+        try:
+            import socket
+            
+            # Test common subdomains
+            for sub in common_subdomains:
+                subdomain = f"{sub}.{domain}"
+                try:
+                    socket.gethostbyname(subdomain)
+                    found_subdomains.append(subdomain)
+                    logger.log(f"Found subdomain: {subdomain}", "DEBUG")
+                except socket.gaierror:
+                    continue
+            
+            # Write results
+            if output_file:
+                result_content = "\n".join(found_subdomains) + "\n"
+                atomic_write(output_file, result_content)
+                logger.log(f"Fallback subdomain enumeration found {len(found_subdomains)} subdomains", "INFO")
+                return True
+                
+        except Exception as e:
+            logger.log(f"Fallback subdomain enumeration failed: {e}", "ERROR")
+            return False
+        
+        return len(found_subdomains) > 0
+    
+    def fallback_port_scan(args, output_file):
+        """Fallback port scanning using socket connections"""
+        logger.log("Using fallback port scanning method", "INFO")
+        
+        # Extract target from args
+        target = None
+        for i, arg in enumerate(args):
+            if i > 0 and not arg.startswith('-'):  # Likely the target
+                target = arg
+                break
+        
+        if not target:
+            logger.log("Cannot determine target for fallback port scan", "ERROR")
+            return False
+        
+        # Common ports to check
+        common_ports = [21, 22, 23, 25, 53, 80, 110, 143, 443, 993, 995, 8080, 8443]
+        open_ports = []
+        
+        try:
+            import socket
+            
+            for port in common_ports:
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(2)
+                    result = sock.connect_ex((target, port))
+                    if result == 0:
+                        open_ports.append(f"{target}:{port}")
+                        logger.log(f"Port {port} open on {target}", "DEBUG")
+                    sock.close()
+                except Exception:
+                    continue
+            
+            # Write results
+            if output_file:
+                result_content = "\n".join(open_ports) + "\n"
+                atomic_write(output_file, result_content)
+                logger.log(f"Fallback port scan found {len(open_ports)} open ports", "INFO")
+                return True
+                
+        except Exception as e:
+            logger.log(f"Fallback port scan failed: {e}", "ERROR")
+            return False
+        
+        return len(open_ports) > 0
+    
+    def fallback_http_probe(args, output_file):
+        """Fallback HTTP probing using requests"""
+        logger.log("Using fallback HTTP probing method", "INFO")
+        
+        # Extract URLs from args or construct from targets
+        urls = []
+        for arg in args:
+            if arg.startswith('http'):
+                urls.append(arg)
+            elif '.' in arg and not arg.startswith('-'):
+                urls.extend([f"http://{arg}", f"https://{arg}"])
+        
+        if not urls:
+            logger.log("No URLs found for fallback HTTP probe", "ERROR")
+            return False
+        
+        live_urls = []
+        
+        try:
+            import requests
+            
+            for url in urls:
+                try:
+                    response = requests.get(url, timeout=5, verify=False)
+                    if response.status_code < 400:
+                        live_urls.append(f"{url} [{response.status_code}]")
+                        logger.log(f"HTTP probe: {url} - {response.status_code}", "DEBUG")
+                except Exception:
+                    continue
+            
+            # Write results
+            if output_file:
+                result_content = "\n".join(live_urls) + "\n"
+                atomic_write(output_file, result_content)
+                logger.log(f"Fallback HTTP probe found {len(live_urls)} live URLs", "INFO")
+                return True
+                
+        except Exception as e:
+            logger.log(f"Fallback HTTP probe failed: {e}", "ERROR")
+            return False
+        
+        return len(live_urls) > 0
+    
+    # Return mapping of tool names to fallback functions
+    return {
+        'subfinder': fallback_subdomain_enum,
+        'amass': fallback_subdomain_enum,
+        'nmap': fallback_port_scan,
+        'naabu': fallback_port_scan,
+        'masscan': fallback_port_scan,
+        'httpx': fallback_http_probe
+    }
+
+# Initialize fallback functions
+FALLBACK_FUNCTIONS = create_fallback_functions()
+
+def safe_http_request(url: str, method: str = 'GET', timeout: int = 10, 
+                     retries: int = 3, **kwargs) -> Optional[Dict[str, Any]]:
+    """Safe HTTP request with enhanced error handling and retry logic"""
+    try:
+        import requests
+        from requests.adapters import HTTPAdapter
+        from requests.packages.urllib3.util.retry import Retry
+        
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=retries,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "OPTIONS", "POST"]
+        )
+        
+        # Create session with retry adapter
+        session = requests.Session()
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        
+        # Set default headers
+        default_headers = {
+            'User-Agent': 'Bl4ckC3ll_PANTHEON/9.0.0 Security Scanner',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive'
+        }
+        
+        headers = kwargs.get('headers', {})
+        headers.update(default_headers)
+        kwargs['headers'] = headers
+        kwargs['timeout'] = timeout
+        kwargs['verify'] = kwargs.get('verify', False)  # Disable SSL verification for security testing
+        
+        logger.log(f"Making {method} request to {url}", "DEBUG")
+        
+        # Make the request
+        response = session.request(method, url, **kwargs)
+        
+        result = {
+            'status_code': response.status_code,
+            'headers': dict(response.headers),
+            'content': response.text,
+            'url': response.url,
+            'elapsed': response.elapsed.total_seconds(),
+            'success': True
+        }
+        
+        logger.log(f"HTTP request successful: {url} - {response.status_code} ({response.elapsed.total_seconds():.2f}s)", "DEBUG")
+        return result
+        
+    except requests.exceptions.ConnectionError as e:
+        logger.log(f"Connection error for {url}: {e}", "WARNING")
+        logger.log("Check network connectivity and target availability", "INFO")
+        return {'success': False, 'error': 'connection_error', 'message': str(e)}
+        
+    except requests.exceptions.Timeout as e:
+        logger.log(f"Request timeout for {url}: {e}", "WARNING")
+        logger.log(f"Consider increasing timeout (current: {timeout}s) or check network speed", "INFO")
+        return {'success': False, 'error': 'timeout', 'message': str(e)}
+        
+    except requests.exceptions.SSLError as e:
+        logger.log(f"SSL error for {url}: {e}", "WARNING")
+        logger.log("SSL verification disabled for security testing, but target may have SSL issues", "INFO")
+        return {'success': False, 'error': 'ssl_error', 'message': str(e)}
+        
+    except requests.exceptions.TooManyRedirects as e:
+        logger.log(f"Too many redirects for {url}: {e}", "WARNING")
+        logger.log("Target may have redirect loops or excessive redirects", "INFO")
+        return {'success': False, 'error': 'redirect_error', 'message': str(e)}
+        
+    except requests.exceptions.RequestException as e:
+        logger.log(f"Request error for {url}: {e}", "WARNING")
+        logger.log("General request error - check URL format and target availability", "INFO")
+        return {'success': False, 'error': 'request_error', 'message': str(e)}
+        
+    except Exception as e:
+        logger.log(f"Unexpected error making request to {url}: {e}", "ERROR")
+        return {'success': False, 'error': 'unexpected_error', 'message': str(e)}
 
 # ---------- Preset Scan Configurations ----------
 class ScanPresets:
@@ -1879,67 +2362,103 @@ def cleanup_resource_monitor(stop_event: threading.Event, monitor_thread: thread
     except Exception as e:
         logger.log(f"Error cleaning up resource monitor: {e}", "WARNING")
 
-def safe_http_request(url: str, timeout: int = 10, headers: Dict[str, str] = None) -> Optional[str]:
-    """Safely make HTTP requests with proper error handling and validation"""
-    if not validate_input(url, max_length=2000):
-        logger.log(f"Invalid URL for HTTP request: {url[:100]}", "WARNING") 
-        return None
-    
-    # Rate limiting to be respectful
-    import time
-    time.sleep(0.1)  # 100ms delay between requests
-    
-    # Use curl for consistent behavior with optimized settings
-    cmd = ["curl", "-s", "-k", "-L", "-m", str(timeout), "--max-redirs", "3"]
-    
-    # Add User-Agent to be more respectful
-    cmd.extend(["-H", "User-Agent: Bl4ckC3ll_PANTHEON/9.0.0 Security Scanner"])
-    
-    if headers:
-        for key, value in headers.items():
-            if validate_input(key) and validate_input(value):
-                cmd.extend(["-H", f"{key}: {value}"])
-    
-    cmd.append(url)
-    
-    result = safe_execute(
-        run_cmd,
-        cmd,
-        capture=True, 
-        timeout=timeout + 5,
-        check_return=False,
-        default=None,
-        error_msg=f"HTTP request failed for {url}",
-        log_level="DEBUG"
-    )
-    
-    return result.stdout if result else None
 
 def execute_tool_safely(tool_name: str, args: List[str], timeout: int = 300, 
-                       output_file: Optional[Path] = None) -> bool:
-    """Safely execute security tools with standardized error handling"""
+                       output_file: Optional[Path] = None, enable_fallback: bool = True) -> bool:
+    """Safely execute security tools with enhanced error handling and graceful fallbacks"""
+    # Enhanced tool availability check with installation suggestions
     if not which(tool_name):
-        logger.log(f"Tool not available: {tool_name}", "WARNING")
+        install_suggestions = {
+            'nuclei': 'go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest',
+            'subfinder': 'go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest',
+            'httpx': 'go install github.com/projectdiscovery/httpx/cmd/httpx@latest',
+            'naabu': 'go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest',
+            'ffuf': 'go install github.com/ffuf/ffuf/v2@latest',
+            'nmap': 'apt install nmap',
+            'sqlmap': 'apt install sqlmap',
+            'masscan': 'apt install masscan',
+            'gobuster': 'go install github.com/OJ/gobuster/v3@latest',
+            'amass': 'go install github.com/owasp-amass/amass/v4/cmd/amass@master',
+            'whois': 'apt install whois'
+        }
+        
+        suggestion = install_suggestions.get(tool_name, f"Please install {tool_name}")
+        logger.log(f"Tool '{tool_name}' not available. Install with: {suggestion}", "WARNING")
+        
+        # Try fallback function if enabled and available
+        if enable_fallback and tool_name in FALLBACK_FUNCTIONS:
+            try:
+                logger.log(f"Attempting fallback method for {tool_name}", "INFO")
+                return FALLBACK_FUNCTIONS[tool_name](args, output_file)
+            except Exception as e:
+                logger.log(f"Fallback method failed for {tool_name}: {e}", "ERROR")
+        
+        # Check if this is a critical tool and suggest alternatives
+        critical_alternatives = {
+            'nuclei': ['Manual vulnerability scanning recommended', 'Consider using nikto or manual testing'],
+            'nmap': ['Use netcat for port testing', 'Consider using naabu or masscan'],
+            'subfinder': ['Try manual subdomain enumeration', 'Use DNS brute force with wordlists'],
+            'sqlmap': ['Perform manual SQL injection testing', 'Use custom payloads for testing']
+        }
+        
+        if tool_name in critical_alternatives:
+            for alt in critical_alternatives[tool_name]:
+                logger.log(f"Alternative: {alt}", "INFO")
+        
         return False
     
-    # Validate arguments
-    for arg in args:
-        if isinstance(arg, str) and not validate_input(arg, max_length=500):
-            logger.log(f"Invalid argument for {tool_name}: {arg[:50]}", "WARNING")
-            return False
+    # Enhanced argument validation with detailed error messages
+    for i, arg in enumerate(args):
+        if isinstance(arg, str):
+            if not validate_input(arg, {'max_length': 1000, 'allow_empty': False}, f"arg_{i}"):
+                logger.log(f"Invalid argument #{i} for {tool_name}: '{arg[:100]}...' (length: {len(arg)})", "ERROR")
+                return False
+            
+            # Additional security validation for specific patterns
+            if any(pattern in arg.lower() for pattern in ['rm -rf', 'format c:', ':(){ :|:& };:']):
+                logger.log(f"Potentially dangerous argument detected for {tool_name}: {arg[:50]}", "ERROR")
+                return False
     
     cmd = [tool_name] + args
+    logger.log(f"Executing: {tool_name} with {len(args)} arguments", "DEBUG")
+    
+    # Enhanced execution with better error context
     result = safe_execute(
         run_cmd,
         cmd,
         capture=bool(output_file),
         timeout=timeout,
         default=None,
-        error_msg=f"Tool execution failed: {tool_name}"
+        error_msg=f"Tool execution failed: {tool_name} (args: {len(args)})",
+        log_level="ERROR"
     )
     
-    if result and output_file and hasattr(result, 'stdout'):
-        return atomic_write(output_file, result.stdout)
+    if result is None:
+        logger.log(f"Tool {tool_name} execution returned no result - check tool output above", "WARNING")
+        return False
+    
+    # Enhanced output handling with validation
+    if output_file and hasattr(result, 'stdout'):
+        if result.stdout:
+            success = atomic_write(output_file, result.stdout)
+            if success:
+                logger.log(f"Tool output saved to {output_file} ({len(result.stdout)} chars)", "DEBUG")
+            return success
+        else:
+            logger.log(f"Tool {tool_name} produced no output", "WARNING")
+            # Create empty file to indicate tool ran but produced no output
+            if output_file:
+                atomic_write(output_file, f"# {tool_name} executed successfully but produced no output\n")
+            return True
+    
+    # Check if tool executed successfully based on return code
+    if hasattr(result, 'returncode'):
+        if result.returncode == 0:
+            logger.log(f"Tool {tool_name} completed successfully", "DEBUG")
+            return True
+        else:
+            logger.log(f"Tool {tool_name} exited with code {result.returncode}", "WARNING")
+            return False
     
     return result is not None
 
@@ -2044,44 +2563,111 @@ def run_cmd(cmd,
             backoff: float = 1.6,
             capture: bool = True,
             check_return: bool = True,
-            use_shell: bool = False) -> subprocess.CompletedProcess:
+            use_shell: bool = False,
+            input_data: Optional[str] = None) -> subprocess.CompletedProcess:
+    """Enhanced command execution with better error handling and retry logic"""
     if isinstance(cmd, str):
         args = cmd if use_shell else shlex.split(cmd)
     else:
         args = cmd
+    
+    # Validate command arguments for security
+    if isinstance(args, list) and len(args) > 0:
+        tool_name = args[0]
+        # Log command execution for debugging
+        logger.log(f"Executing command: {tool_name} (with {len(args)-1} args)", "DEBUG")
+    
     attempt = 0
     last_exc: Optional[Exception] = None
+    max_retries = max(0, min(retries, 5))  # Cap retries to reasonable limit
+    
     while True:
         t0 = time.time()
         try:
+            # Enhanced subprocess execution with better error context
             p = subprocess.run(
                 args,
-                cwd=str(cwd, timeout=300) if cwd else None,
+                cwd=str(cwd) if cwd else None,
                 env=env,
                 text=True,
                 capture_output=capture,
                 timeout=timeout if timeout and timeout > 0 else None,
-                shell=use_shell
+                shell=use_shell,
+                input=input_data
             )
             dt = round(time.time() - t0, 3)
+            
+            # Enhanced output logging with size limits
             if p.stdout:
-                logger.log(f"STDOUT [{getattr(args,'__class__',type(args)).__name__}]: {p.stdout[:2000]}", "DEBUG")
+                stdout_preview = p.stdout[:1000] + "..." if len(p.stdout) > 1000 else p.stdout
+                logger.log(f"Command completed in {dt}s with stdout ({len(p.stdout)} chars)", "DEBUG")
+                logger.log(f"STDOUT preview: {stdout_preview}", "DEBUG")
             if p.stderr:
-                logger.log(f"STDERR: {p.stderr[:2000]}", "DEBUG")
+                stderr_preview = p.stderr[:500] + "..." if len(p.stderr) > 500 else p.stderr
+                logger.log(f"STDERR ({len(p.stderr)} chars): {stderr_preview}", "DEBUG")
+            
+            # Enhanced return code handling
             if check_return and p.returncode != 0:
-                raise RuntimeError(f"Command failed rc={p.returncode}")
+                cmd_str = ' '.join(args) if isinstance(args, list) else str(args)
+                error_msg = f"Command failed with exit code {p.returncode}: {cmd_str}"
+                
+                # Provide specific error context based on return code
+                if p.returncode == 1:
+                    error_msg += " (General error - check command syntax and parameters)"
+                elif p.returncode == 2:
+                    error_msg += " (Invalid usage - check command arguments)"
+                elif p.returncode == 126:
+                    error_msg += " (Command found but not executable - check permissions)"
+                elif p.returncode == 127:
+                    error_msg += " (Command not found - check if tool is installed)"
+                elif p.returncode == 130:
+                    error_msg += " (Process interrupted - likely by user or timeout)"
+                
+                raise subprocess.CalledProcessError(p.returncode, args, p.stdout, p.stderr)
+            
+            logger.log(f"Command executed successfully in {dt}s", "DEBUG")
             return p
-        except subprocess.TimeoutExpired:
-            last_exc = RuntimeError("timeout")
-            logger.log(f"Timeout: {args if isinstance(args, list) else cmd}", "ERROR")
+            
+        except subprocess.TimeoutExpired as e:
+            last_exc = e
+            timeout_msg = f"Command timeout after {timeout}s: {args if isinstance(args, list) else cmd}"
+            logger.log(timeout_msg, "ERROR")
+            
+            # Provide timeout-specific recovery suggestions
+            if attempt == 0:  # Only log suggestions on first timeout
+                logger.log("Timeout recovery suggestions: increase timeout, reduce scope, or check network", "INFO")
+                
+        except subprocess.CalledProcessError as e:
+            last_exc = e
+            cmd_str = ' '.join(e.cmd) if isinstance(e.cmd, list) else str(e.cmd)
+            logger.log(f"Command failed (exit {e.returncode}): {cmd_str}", "ERROR")
+            
+            # Log stderr if available for debugging
+            if e.stderr:
+                logger.log(f"Command stderr: {e.stderr[:300]}...", "DEBUG")
+                
+        except FileNotFoundError as e:
+            last_exc = e
+            tool_name = args[0] if isinstance(args, list) and len(args) > 0 else str(cmd)
+            logger.log(f"Tool not found: {tool_name}", "ERROR")
+            logger.log(f"Install suggestion: Check if {tool_name} is installed and in PATH", "INFO")
+            
         except Exception as e:
             last_exc = e
-            logger.log(f"Command error: {args if isinstance(args, list) else cmd} -> {e}", "ERROR")
+            error_context = f"Unexpected error executing: {args if isinstance(args, list) else cmd}"
+            logger.log(f"{error_context} -> {type(e).__name__}: {e}", "ERROR")
+        
         attempt += 1
-        if attempt > retries:
+        if attempt > max_retries:
+            # Enhanced final error reporting
+            if last_exc:
+                final_msg = f"Command failed after {attempt} attempts: {args if isinstance(args, list) else cmd}"
+                logger.log(final_msg, "ERROR")
             raise last_exc  # type: ignore
-        sleep_for = backoff ** attempt
-        logger.log(f"Retrying in {sleep_for:.1f}s (attempt {attempt}/{retries})", "WARNING")
+            
+        # Exponential backoff with jitter
+        sleep_for = min(backoff ** attempt + (attempt * 0.1), 30)  # Cap at 30 seconds
+        logger.log(f"Retrying command in {sleep_for:.1f}s (attempt {attempt}/{max_retries})", "WARNING")
         time.sleep(sleep_for)
 
 def ensure_layout():
