@@ -5654,7 +5654,17 @@ def extract_key_findings(vuln_results: Dict[str, Any]) -> List[str]:
     findings = []
 
     for target, data in vuln_results.items():
+        # Safety check: ensure data is a dictionary
+        if not isinstance(data, dict):
+            logger.log(f"Warning: data for target {target} is not a dictionary, skipping", "DEBUG")
+            continue
+            
         nuclei_parsed = data.get("nuclei_parsed", {})
+        
+        # Safety check: ensure nuclei_parsed is a dictionary
+        if not isinstance(nuclei_parsed, dict):
+            logger.log(f"Warning: nuclei_parsed for target {target} is not a dictionary, skipping", "DEBUG")
+            continue
 
         # Critical findings
         if nuclei_parsed.get("critical"):
@@ -5683,8 +5693,21 @@ def generate_csv_report(report_data: Dict[str, Any], report_dir: Path):
         writer.writerow(['Target', 'Vulnerability', 'Severity', 'Description', 'Template'])
 
         for target, data in report_data["vuln_scan_results"].items():
+            # Safety check: ensure data is a dictionary
+            if not isinstance(data, dict):
+                logger.log(f"Warning: data for target {target} is not a dictionary, skipping", "DEBUG")
+                continue
+                
             nuclei_parsed = data.get("nuclei_parsed", {})
+            
+            # Safety check: ensure nuclei_parsed is a dictionary
+            if not isinstance(nuclei_parsed, dict):
+                logger.log(f"Warning: nuclei_parsed for target {target} is not a dictionary, skipping", "DEBUG")
+                continue
+                
             for severity, findings in nuclei_parsed.items():
+                if not isinstance(findings, (list, tuple)):
+                    continue
                 for finding in findings:
                     info = finding.get("info", {})
                     writer.writerow([
@@ -5713,8 +5736,21 @@ def generate_sarif_report(report_data: Dict[str, Any], report_dir: Path):
     }
 
     for target, data in report_data["vuln_scan_results"].items():
+        # Safety check: ensure data is a dictionary
+        if not isinstance(data, dict):
+            logger.log(f"Warning: data for target {target} is not a dictionary, skipping", "DEBUG")
+            continue
+            
         nuclei_parsed = data.get("nuclei_parsed", {})
+        
+        # Safety check: ensure nuclei_parsed is a dictionary
+        if not isinstance(nuclei_parsed, dict):
+            logger.log(f"Warning: nuclei_parsed for target {target} is not a dictionary, skipping", "DEBUG")
+            continue
+            
         for severity, findings in nuclei_parsed.items():
+            if not isinstance(findings, (list, tuple)):
+                continue
             for finding in findings:
                 info = finding.get("info", {})
                 result = {
@@ -5787,14 +5823,25 @@ def generate_enhanced_html_report(report_data: Dict[str, Any], report_dir: Path)
     def html_vuln() -> str:
         chunks: List[str] = []
         for target, data in report_data["vuln_scan_results"].items():
+            # Safety check: ensure data is a dictionary
+            if not isinstance(data, dict):
+                logger.log(f"Warning: data for target {target} is not a dictionary, skipping", "DEBUG")
+                continue
+                
             nuclei_parsed = data.get("nuclei_parsed", {})
+            
+            # Safety check: ensure nuclei_parsed is a dictionary
+            if not isinstance(nuclei_parsed, dict):
+                logger.log(f"Warning: nuclei_parsed for target {target} is not a dictionary, skipping", "DEBUG")
+                continue
+                
             risk_score = data.get("risk_score", 0)
 
             # Vulnerability summary
             vuln_summary = ""
-            total_vulns = sum(len(findings) for findings in nuclei_parsed.values())
+            total_vulns = sum(len(findings) for findings in nuclei_parsed.values() if isinstance(findings, (list, tuple)))
             if total_vulns > 0:
-                vuln_summary = """
+                vuln_summary = f"""
                 <div class="vuln-summary">
                   <h4>[REPORT] Vulnerability Summary</h4>
                   <div class="severity-grid">
@@ -6140,18 +6187,122 @@ def display_menu():
     print("\033[31m" + "="*80 + "\033[0m")
 
 def get_choice() -> int:
+    """Enhanced choice input with help and shortcuts"""
     try:
-        s = input("\n\033[93mSelect (1-28): \033[0m").strip()
-        if s.isdigit():
-            n = int(s)
-            if 1 <= n <= 28:
-                return n
+        while True:
+            prompt = "\n\033[93mSelect (1-28)\033[0m"
+            prompt += "\033[90m [h=help, s=status, q=quit]: \033[0m"
+            s = input(prompt).strip().lower()
+            
+            # Handle shortcuts
+            if s in ['h', 'help']:
+                show_enhanced_help()
+                continue
+            elif s in ['s', 'status']:
+                show_quick_status()
+                continue
+            elif s in ['q', 'quit', 'exit']:
+                return 28
+            elif s == '':
+                print("\033[91mPlease enter a choice (1-28) or 'h' for help\033[0m")
+                continue
+            
+            # Handle numeric input
+            if s.isdigit():
+                n = int(s)
+                if 1 <= n <= 28:
+                    return n
+                else:
+                    print(f"\033[91mInvalid choice: {n}. Please select 1-28\033[0m")
+            else:
+                print(f"\033[91mInvalid input: '{s}'. Please enter a number 1-28 or 'h' for help\033[0m")
+                
     except (EOFError, KeyboardInterrupt):
+        print("\n\033[93mReceived interrupt signal. Exiting...\033[0m")
         return 28
     except Exception as e:
-            logging.warning(f"Operation failed: {e}")
-            # Consider if this error should be handled differently
+        logging.warning(f"Input error: {e}")
+        print(f"\033[91mInput error: {e}\033[0m")
     return 0
+
+def show_enhanced_help():
+    """Show enhanced help information"""
+    print(f"\n\033[96m{'='*80}\033[0m")
+    print("\033[96mBL4CKC3LL_P4NTH30N - HELP & QUICK REFERENCE".center(80) + "\033[0m")
+    print(f"\033[96m{'='*80}\033[0m")
+    
+    print("\n\033[95m🔧 ESSENTIAL OPERATIONS:\033[0m")
+    print("  1  → Target Management     | Add/edit authorized targets")
+    print("  2  → Refresh Sources       | Update wordlists and sources")  
+    print("  5  → Full Pipeline         | Complete recon + scan + report")
+    print("  7  → Generate Report       | Create detailed findings report")
+    print("  23 → Tool Status           | Check installed security tools")
+    
+    print("\n\033[94m🔍 RECONNAISSANCE & SCANNING:\033[0m")
+    print("  3  → Reconnaissance        | Subdomain discovery and enumeration")
+    print("  4  → Vulnerability Scan    | Security vulnerability assessment")
+    print("  11 → Network Analysis      | Advanced network scanning")
+    print("  24 → BCAR Enhanced Recon   | Certificate-based reconnaissance")
+    
+    print("\n\033[93m⚡ QUICK SCAN PRESETS:\033[0m")
+    print("  6  → Preset Configurations | Fast, thorough, stealth modes")
+    print("  20 → Automated Chain       | Fully automated testing sequence")
+    
+    print("\n\033[92m🛠️  ADVANCED FEATURES:\033[0m")
+    print("  21 → TUI Interface         | Terminal User Interface")
+    print("  13 → AI Analysis           | AI-powered vulnerability analysis")
+    print("  14 → Cloud Security        | AWS/Azure/GCP security assessment")
+    print("  15 → API Security          | REST/GraphQL API testing")
+    
+    print("\n\033[91m🔐 SPECIALIZED TESTING:\033[0m")
+    print("  25 → Subdomain Takeover    | Advanced takeover detection")
+    print("  26 → Payload Injection     | Automated payload testing")
+    print("  27 → Advanced Fuzzing      | Comprehensive fuzzing operations")
+    
+    print("\n\033[90m💡 QUICK TIPS:\033[0m")
+    print("  • First time? Try: 1 → 2 → 5 → 7 (setup targets → full scan → report)")
+    print("  • Tool issues? Use option 23 to check tool status")
+    print("  • Need help? Type 'h' anytime for this help menu")
+    print("  • Want to quit? Type 'q' or use option 28")
+    
+    print(f"\n\033[96m{'='*80}\033[0m")
+
+def show_quick_status():
+    """Show quick system status"""
+    print(f"\n\033[96m{'='*40}\033[0m")
+    print("\033[96mQUICK STATUS".center(40) + "\033[0m")
+    print(f"\033[96m{'='*40}\033[0m")
+    
+    # Check targets
+    targets = read_lines(TARGETS)
+    print(f"📋 Targets configured: \033[93m{len(targets)}\033[0m")
+    
+    # Check recent runs
+    runs_dir = Path(RUNS_DIR)
+    if runs_dir.exists():
+        recent_runs = sorted([d for d in runs_dir.iterdir() if d.is_dir()], 
+                           key=lambda x: x.stat().st_mtime, reverse=True)[:3]
+        print(f"📊 Recent runs: \033[93m{len(recent_runs)}\033[0m")
+        for run in recent_runs:
+            mtime = datetime.fromtimestamp(run.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+            print(f"   └─ {run.name} ({mtime})")
+    else:
+        print("📊 Recent runs: \033[93m0\033[0m")
+    
+    # Quick tool check
+    core_tools = ["subfinder", "httpx", "naabu", "nuclei", "nmap"]
+    available = sum(1 for tool in core_tools if which(tool))
+    print(f"🔧 Core tools: \033[93m{available}/{len(core_tools)}\033[0m available")
+    
+    # Memory usage
+    try:
+        import psutil
+        memory = psutil.virtual_memory()
+        print(f"💾 Memory usage: \033[93m{memory.percent:.1f}%\033[0m")
+    except ImportError:
+        print("💾 Memory usage: \033[90mN/A\033[0m")
+    
+    print(f"\033[96m{'='*40}\033[0m")
 
 def run_full_pipeline():
     """Run the complete pipeline: recon -> vuln scan -> report"""

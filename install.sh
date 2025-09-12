@@ -61,20 +61,166 @@ check_python() {
     fi
 }
 
+# Detect operating system
+detect_os() {
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        OS_ID="$ID"
+        OS_VERSION="$VERSION_ID"
+        OS_LIKE="$ID_LIKE"
+        
+        case "$OS_ID" in
+            "kali")
+                OS_TYPE="kali"
+                PACKAGE_MANAGER="apt"
+                log_info "Detected Kali Linux"
+                ;;
+            "arch")
+                OS_TYPE="arch"
+                PACKAGE_MANAGER="pacman"
+                log_info "Detected Arch Linux"
+                ;;
+            "ubuntu"|"debian")
+                OS_TYPE="debian"
+                PACKAGE_MANAGER="apt"
+                log_info "Detected $OS_ID Linux"
+                ;;
+            *)
+                if [[ "$OS_LIKE" == *"debian"* ]] || [[ "$OS_LIKE" == *"ubuntu"* ]]; then
+                    OS_TYPE="debian"
+                    PACKAGE_MANAGER="apt"
+                    log_info "Detected Debian-based system"
+                elif [[ "$OS_LIKE" == *"arch"* ]]; then
+                    OS_TYPE="arch"
+                    PACKAGE_MANAGER="pacman"
+                    log_info "Detected Arch-based system"
+                else
+                    OS_TYPE="unknown"
+                    PACKAGE_MANAGER="unknown"
+                    log_warning "Unknown OS detected: $OS_ID"
+                fi
+                ;;
+        esac
+    else
+        OS_TYPE="unknown"
+        PACKAGE_MANAGER="unknown"
+        log_warning "Could not detect operating system"
+    fi
+}
+
+# Check if environment is externally managed (PEP 668)
+is_externally_managed() {
+    python3 -c "import sys; exit(0 if hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix else 1)" 2>/dev/null
+    if [[ $? -eq 0 ]]; then
+        return 1  # In virtual environment
+    fi
+    
+    # Check for EXTERNALLY-MANAGED file
+    local python_path=$(python3 -c "import sys; print(sys.prefix)")
+    if [[ -f "$python_path/EXTERNALLY-MANAGED" ]] || [[ -f "$python_path/lib/python*/site-packages/EXTERNALLY-MANAGED" ]]; then
+        return 0  # Externally managed
+    fi
+    
+    return 1  # Not externally managed
+}
+
+# Install system packages via package manager
+install_system_packages() {
+    log_info "Installing system packages for Python dependencies..."
+    
+    case "$PACKAGE_MANAGER" in
+        "apt")
+            sudo apt update -qq
+            local packages=("python3-pip" "python3-dev" "python3-psutil" "python3-distro" "python3-requests")
+            for pkg in "${packages[@]}"; do
+                if ! dpkg -l | grep -q "^ii  $pkg "; then
+                    log_info "Installing $pkg..."
+                    sudo apt install -y "$pkg" &>/dev/null || log_warning "Failed to install $pkg"
+                else
+                    log_info "✓ $pkg already installed"
+                fi
+            done
+            ;;
+        "pacman")
+            sudo pacman -Sy --noconfirm
+            local packages=("python-pip" "python-psutil" "python-distro" "python-requests")
+            for pkg in "${packages[@]}"; do
+                if ! pacman -Q "$pkg" &>/dev/null; then
+                    log_info "Installing $pkg..."
+                    sudo pacman -S --noconfirm "$pkg" &>/dev/null || log_warning "Failed to install $pkg"
+                else
+                    log_info "✓ $pkg already installed"
+                fi
+            done
+            ;;
+        *)
+            log_warning "Unknown package manager, attempting pip installation with fallbacks"
+            ;;
+    esac
+}
+
 # Upgrade pip and install Python dependencies
 install_python_deps() {
     log_info "Installing Python dependencies..."
     
+    # Detect OS first
+    detect_os
+    
+    # Try system packages first for known distributions
+    if [[ "$PACKAGE_MANAGER" != "unknown" ]]; then
+        install_system_packages
+    fi
+    
+    # Check if environment is externally managed
+    local pip_flags=""
+    if is_externally_managed; then
+        log_warning "Detected externally managed Python environment"
+        if [[ "$OS_TYPE" == "kali" ]]; then
+            log_info "Using --break-system-packages for Kali Linux"
+            pip_flags="--break-system-packages"
+        else
+            log_info "Creating virtual environment..."
+            if ! command -v python3-venv &>/dev/null; then
+                case "$PACKAGE_MANAGER" in
+                    "apt") sudo apt install -y python3-venv ;;
+                    "pacman") sudo pacman -S --noconfirm python-virtualenv ;;
+                esac
+            fi
+            
+            # Create and activate virtual environment
+            if ! [[ -d "venv" ]]; then
+                python3 -m venv venv
+                log_success "Virtual environment created"
+            fi
+            
+            # Source virtual environment
+            source venv/bin/activate
+            log_info "Activated virtual environment"
+        fi
+    fi
+    
     # Upgrade pip
-    python3 -m pip install --upgrade pip --user
+    python3 -m pip install --upgrade pip --user $pip_flags 2>/dev/null || \
+    python3 -m pip install --upgrade pip $pip_flags
     
     # Install requirements
     if [[ -f "requirements.txt" ]]; then
-        python3 -m pip install -r requirements.txt --user
+        if [[ -n "$pip_flags" ]]; then
+            python3 -m pip install -r requirements.txt $pip_flags
+        else
+            python3 -m pip install -r requirements.txt --user
+        fi
         log_success "Python dependencies installed"
     else
         log_warning "requirements.txt not found, installing basic dependencies"
-        python3 -m pip install psutil distro requests --user
+        local basic_deps=("psutil" "distro" "requests")
+        for dep in "${basic_deps[@]}"; do
+            if [[ -n "$pip_flags" ]]; then
+                python3 -m pip install "$dep" $pip_flags 2>/dev/null || true
+            else
+                python3 -m pip install "$dep" --user 2>/dev/null || true
+            fi
+        done
     fi
 }
 
@@ -621,7 +767,7 @@ EOF
 
 # Enhanced automated tool installation
 install_security_tools() {
-    log_info "Starting automated security tool installation..."
+    log_info "Starting comprehensive automated security tool installation..."
     
     local install_success=0
     local install_failed=0
@@ -633,54 +779,114 @@ install_security_tools() {
         setup_go_env
     fi
     
-    # Install APT tools
-    log_info "Installing APT-based security tools..."
-    local apt_tools=("nmap" "sqlmap" "nikto" "dirb" "masscan" "sslscan" "dnsrecon" "whois" "curl" "wget")
+    # Enhanced APT tools based on OS detection
+    log_info "Installing system-based security tools..."
     
-    if command -v apt &> /dev/null; then
-        sudo apt update -qq
-        for tool in "${apt_tools[@]}"; do
-            if ! command -v "$tool" &> /dev/null; then
-                log_info "Installing $tool..."
-                if sudo apt install -y "$tool" &> /dev/null; then
-                    log_success "✓ $tool installed successfully"
-                    ((install_success++))
-                else
-                    log_error "✗ Failed to install $tool"
-                    ((install_failed++))
-                fi
-            else
-                log_info "✓ $tool already installed"
+    case "$PACKAGE_MANAGER" in
+        "apt")
+            local system_tools=(
+                "nmap" "sqlmap" "nikto" "dirb" "masscan" "dnsrecon" "whois" 
+                "curl" "wget" "git" "unzip" "jq" "whatweb" "commix"
+                "sslscan" "sslyze" "testssl.sh" "fierce" "dnsutils"
+                "netcat-openbsd" "socat" "tcpdump" "wireshark-common"
+            )
+            
+            if sudo apt update -qq; then
+                for tool in "${system_tools[@]}"; do
+                    if ! command -v "${tool%%-*}" &> /dev/null && ! dpkg -l | grep -q "^ii  $tool "; then
+                        log_info "Installing $tool..."
+                        if sudo apt install -y "$tool" &> /dev/null; then
+                            log_success "✓ $tool installed successfully"
+                            ((install_success++))
+                        else
+                            log_warning "✗ Failed to install $tool"
+                            ((install_failed++))
+                        fi
+                    else
+                        log_info "✓ $tool already installed"
+                    fi
+                done
             fi
-        done
-    fi
+            ;;
+        "pacman")
+            local system_tools=(
+                "nmap" "sqlmap" "nikto" "dirb" "masscan" "dnsrecon" "whois"
+                "curl" "wget" "git" "unzip" "jq" "whatweb"
+                "sslscan" "netcat" "socat" "tcpdump" "wireshark-cli"
+            )
+            
+            for tool in "${system_tools[@]}"; do
+                if ! command -v "$tool" &> /dev/null && ! pacman -Q "$tool" &> /dev/null; then
+                    log_info "Installing $tool..."
+                    if sudo pacman -S --noconfirm "$tool" &> /dev/null; then
+                        log_success "✓ $tool installed successfully"
+                        ((install_success++))
+                    else
+                        log_warning "✗ Failed to install $tool"
+                        ((install_failed++))
+                    fi
+                else
+                    log_info "✓ $tool already installed"
+                fi
+            done
+            ;;
+        *)
+            log_warning "Unknown package manager, skipping system tools"
+            ;;
+    esac
     
-    # Install Go-based security tools
+    # Install Go-based security tools (comprehensive list)
     log_info "Installing Go-based security tools..."
     local go_tools=(
+        # Core ProjectDiscovery Tools
         "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
         "github.com/projectdiscovery/httpx/cmd/httpx@latest" 
         "github.com/projectdiscovery/naabu/v2/cmd/naabu@latest"
         "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
         "github.com/projectdiscovery/katana/cmd/katana@latest"
-        "github.com/lc/gau/v2/cmd/gau@latest"
+        "github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
+        "github.com/projectdiscovery/notify/cmd/notify@latest"
+        "github.com/projectdiscovery/interactsh/cmd/interactsh-client@latest"
+        
+        # Web Discovery and Fuzzing
         "github.com/ffuf/ffuf/v2@latest"
         "github.com/OJ/gobuster/v3@latest"
         "github.com/epi052/feroxbuster@latest"
+        "github.com/hahwul/dalfox/v2@latest"
+        
+        # URL and Asset Discovery
+        "github.com/lc/gau/v2/cmd/gau@latest"
         "github.com/tomnomnom/waybackurls@latest"
         "github.com/jaeles-project/gospider@latest"
+        "github.com/tomnomnom/assetfinder@latest"
+        "github.com/findomain/findomain@latest"
+        
+        # Subdomain Takeover and Security
         "github.com/haccer/subjack@latest"
         "github.com/LukaSikic/subzy@latest"
+        
+        # Parameter Discovery and Testing
         "github.com/devanshbatham/paramspider@latest"
-        "github.com/hahwul/dalfox/v2@latest"
-        "github.com/tomnomnom/assetfinder@latest"
+        "github.com/maK-/parameth@latest"
+        
+        # Additional Tools
+        "github.com/tomnomnom/httprobe@latest"
+        "github.com/tomnomnom/meg@latest"
+        "github.com/tomnomnom/unfurl@latest"
+        "github.com/tomnomnom/anew@latest"
+        "github.com/hakluke/hakrawler@latest"
+        "github.com/michenriksen/aquatone@latest"
+        "github.com/sensepost/gowitness@latest"
+        
+        # OWASP Tools
+        "github.com/owasp-amass/amass/v4/cmd/amass@master"
     )
     
     for tool_url in "${go_tools[@]}"; do
         tool_name=$(basename "${tool_url%@*}")
         if ! command -v "$tool_name" &> /dev/null; then
             log_info "Installing $tool_name..."
-            if timeout 120 go install -v "$tool_url" &> /dev/null; then
+            if timeout 180 go install -v "$tool_url" &> /dev/null; then
                 log_success "✓ $tool_name installed successfully"
                 ((install_success++))
             else
@@ -692,14 +898,28 @@ install_security_tools() {
         fi
     done
     
-    # Install Python tools
+    # Install Python tools (using the pip flags determined earlier)
     log_info "Installing Python-based security tools..."
-    local python_tools=("arjun" "dirsearch" "xsstrike")
+    local python_tools=(
+        "arjun" "dirsearch" "xsstrike" "sqlmap" "commix"
+        "sublist3r" "droopescan" "wappalyzer" "shodan"
+        "censys" "builtwith" "wafw00f" "whatweb"
+        "requests" "beautifulsoup4" "lxml" "selenium"
+    )
     
     for tool in "${python_tools[@]}"; do
-        if ! command -v "$tool" &> /dev/null && ! python3 -c "import $tool" &> /dev/null; then
+        if ! command -v "$tool" &> /dev/null && ! python3 -c "import $tool" &> /dev/null 2>&1; then
             log_info "Installing $tool..."
-            if pip3 install --user "$tool" &> /dev/null; then
+            
+            # Use the same pip installation method as the dependency installation
+            local pip_cmd="pip3 install"
+            if [[ -n "$pip_flags" ]]; then
+                pip_cmd="pip3 install $pip_flags"
+            else
+                pip_cmd="pip3 install --user"
+            fi
+            
+            if $pip_cmd "$tool" &> /dev/null; then
                 log_success "✓ $tool installed successfully"
                 ((install_success++))
             else
@@ -711,7 +931,92 @@ install_security_tools() {
         fi
     done
     
-    log_info "Installation complete: $install_success successful, $install_failed failed"
+    # Install Node.js tools (if npm is available)
+    if command -v npm &> /dev/null; then
+        log_info "Installing Node.js-based security tools..."
+        local npm_tools=("wappalyzer" "retire" "@zap/cli" "ssl-checker")
+        
+        for tool in "${npm_tools[@]}"; do
+            if ! npm list -g "$tool" &> /dev/null; then
+                log_info "Installing $tool..."
+                if sudo npm install -g "$tool" &> /dev/null; then
+                    log_success "✓ $tool installed successfully"
+                    ((install_success++))
+                else
+                    log_warning "✗ Failed to install $tool"
+                    ((install_failed++))
+                fi
+            else
+                log_info "✓ $tool already installed"
+            fi
+        done
+    else
+        log_warning "npm not found, skipping Node.js tools"
+    fi
+    
+    # Install Rust tools (if cargo is available)
+    if command -v cargo &> /dev/null; then
+        log_info "Installing Rust-based security tools..."
+        local rust_tools=("rustscan" "ripgrep" "fd-find")
+        
+        for tool in "${rust_tools[@]}"; do
+            if ! command -v "$tool" &> /dev/null; then
+                log_info "Installing $tool..."
+                if timeout 300 cargo install "$tool" &> /dev/null; then
+                    log_success "✓ $tool installed successfully"
+                    ((install_success++))
+                else
+                    log_warning "✗ Failed to install $tool"
+                    ((install_failed++))
+                fi
+            else
+                log_info "✓ $tool already installed"
+            fi
+        done
+    else
+        log_info "cargo not found, skipping Rust tools (optional)"
+    fi
+    
+    # Update nuclei templates
+    if command -v nuclei &> /dev/null; then
+        log_info "Updating nuclei templates..."
+        nuclei -ut &> /dev/null || log_warning "Failed to update nuclei templates"
+    fi
+    
+    # Update Go module cache
+    if command -v go &> /dev/null; then
+        log_info "Cleaning Go module cache..."
+        go clean -modcache &> /dev/null || true
+    fi
+    
+    log_info "Comprehensive tool installation complete:"
+    log_info "  ✓ $install_success tools installed successfully"
+    if [[ $install_failed -gt 0 ]]; then
+        log_warning "  ✗ $install_failed tools failed to install"
+    fi
+    
+    # Final tool validation
+    log_info "Validating installed tools..."
+    local core_tools=("subfinder" "httpx" "naabu" "nuclei" "katana" "gau" "ffuf" "nmap")
+    local available_core=0
+    
+    for tool in "${core_tools[@]}"; do
+        if command -v "$tool" &> /dev/null; then
+            ((available_core++))
+        fi
+    done
+    
+    log_info "Core tools available: $available_core/${#core_tools[@]}"
+    
+    if [[ $available_core -ge 6 ]]; then
+        log_success "Excellent tool coverage achieved!"
+    elif [[ $available_core -ge 4 ]]; then
+        log_success "Good tool coverage achieved!"
+    elif [[ $available_core -ge 2 ]]; then
+        log_warning "Moderate tool coverage. Some features may be limited."
+    else
+        log_error "Poor tool coverage. Many features will be unavailable."
+    fi
 }
 
 # Enhanced wordlist creation and management
