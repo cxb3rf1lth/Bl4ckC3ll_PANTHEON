@@ -782,7 +782,8 @@ def validate_input(value: str, validators: Dict[str, Any] = None, field_name: st
     
     # URL validation
     if validators.get('type') == 'url':
-        url_pattern = r'^https?://[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*(/.*)?$'
+        # More flexible URL pattern that handles both domains and IP addresses with ports
+        url_pattern = r'^https?://([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*|(\d{1,3}\.){3}\d{1,3})(:\d+)?(/.*)?$'
         if not re.match(url_pattern, value):
             logger.log(f"Invalid URL format for {field_name}: {value}", "WARNING")
             logger.log(f"URL should start with http:// or https://", "INFO")
@@ -923,7 +924,8 @@ def validate_url_input(url: str) -> bool:
             try:
                 import ipaddress
                 ipaddress.ip_address(hostname)
-                return validate_ip_input(hostname)
+                # For URLs, we accept all valid IP addresses including private ones
+                return True
             except ValueError:
                 # It's a domain name
                 return validate_domain_input(hostname)
@@ -2360,41 +2362,6 @@ def cleanup_resource_monitor(stop_event: threading.Event, monitor_thread: thread
     except Exception as e:
         logger.log(f"Error cleaning up resource monitor: {e}", "WARNING")
 
-def safe_http_request(url: str, timeout: int = 10, headers: Dict[str, str] = None) -> Optional[str]:
-    """Safely make HTTP requests with proper error handling and validation"""
-    if not validate_input(url, max_length=2000):
-        logger.log(f"Invalid URL for HTTP request: {url[:100]}", "WARNING") 
-        return None
-    
-    # Rate limiting to be respectful
-    import time
-    time.sleep(0.1)  # 100ms delay between requests
-    
-    # Use curl for consistent behavior with optimized settings
-    cmd = ["curl", "-s", "-k", "-L", "-m", str(timeout), "--max-redirs", "3"]
-    
-    # Add User-Agent to be more respectful
-    cmd.extend(["-H", "User-Agent: Bl4ckC3ll_PANTHEON/9.0.0 Security Scanner"])
-    
-    if headers:
-        for key, value in headers.items():
-            if validate_input(key) and validate_input(value):
-                cmd.extend(["-H", f"{key}: {value}"])
-    
-    cmd.append(url)
-    
-    result = safe_execute(
-        run_cmd,
-        cmd,
-        capture=True, 
-        timeout=timeout + 5,
-        check_return=False,
-        default=None,
-        error_msg=f"HTTP request failed for {url}",
-        log_level="DEBUG"
-    )
-    
-    return result.stdout if result else None
 
 def execute_tool_safely(tool_name: str, args: List[str], timeout: int = 300, 
                        output_file: Optional[Path] = None, enable_fallback: bool = True) -> bool:
